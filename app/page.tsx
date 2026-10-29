@@ -1,54 +1,135 @@
 "use client";
 
-import { createClient } from '@/lib/supabase'
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { createClient } from "@/lib/supabase";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Plus, ChevronRight, ShoppingBasket } from "lucide-react";
+import StatusBadge from "@/app/components/StatusBadge";
+
+type Order = {
+  id: string;
+  title: string;
+  status: string;
+  created_at: string;
+};
+
+function formatTanggal(iso: string) {
+  return new Date(iso).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function CardSkeleton() {
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white p-4">
+      <div className="h-4 w-1/2 animate-pulse rounded bg-stone-100" />
+      <div className="mt-2 h-3 w-1/3 animate-pulse rounded bg-stone-100" />
+    </div>
+  );
+}
 
 export default function Home() {
-  const [orders, setOrders] = useState<any[]>([])
-  const supabase = createClient()
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
 
   useEffect(() => {
     async function getOrders() {
-      // Mengambil data dari tabel 'orders', diurutkan dari yang terbaru
       const { data, error } = await supabase
-        .from('orders')
+        .from("orders")
         .select()
-        .order('created_at', { ascending: false })
+        .order("created_at", { ascending: false });
 
-      if (data) setOrders(data)
-      if (error) console.log(error)
+      if (data) setOrders(data);
+      if (error) console.log(error);
+      setLoading(false);
     }
-    getOrders()
-  }, [])
+
+    getOrders();
+  }, []);
 
   return (
-    <div className="p-6 max-w-2xl mx-auto font-sans">
-      <h1 className="text-3xl font-bold mb-6">Daftar Belanja Saya</h1>
+    <main className="mx-auto min-h-dvh max-w-lg px-4 pb-10 pt-8">
+      <header className="mb-8">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-green-700">
+          Belanja Pasar
+        </p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-900">
+          Daftar Belanja Saya
+        </h1>
+        <p className="mt-1 text-sm leading-6 text-stone-500">
+          Buat daftar, kirim ke tukang sayur, dan pantau harganya.
+        </p>
+      </header>
 
       <Link
         href="/buat-daftar"
-        className="bg-blue-600 text-white px-6 py-3 rounded-xl inline-block font-bold text-lg mb-8 hover:bg-blue-700 w-full text-center"
+        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-green-800 px-4 text-sm font-medium text-white transition hover:bg-green-900 active:scale-[0.99]"
       >
-        + Buat Daftar Belanja Baru
+        <Plus className="h-5 w-5" strokeWidth={1.75} />
+        Buat Daftar Baru
       </Link>
 
-      <div className="flex flex-col gap-4">
-        {orders.length === 0 ? (
-          <p className="text-gray-500 text-center">Belum ada daftar belanja.</p>
+      <section className="mt-8">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-stone-900">
+            Daftar Terbaru
+          </h2>
+          <span className="text-xs text-stone-400">
+            {loading ? "…" : `${orders.length} daftar`}
+          </span>
+        </div>
+
+        {loading ? (
+          <div className="space-y-3">
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-stone-300 bg-white px-6 py-10 text-center">
+            <ShoppingBasket
+              className="mx-auto h-8 w-8 text-stone-300"
+              strokeWidth={1.5}
+            />
+            <p className="mt-3 text-sm text-stone-500">
+              Belum ada daftar belanja.
+            </p>
+            <p className="mt-1 text-xs text-stone-400">
+              Mulai dengan menekan tombol di atas.
+            </p>
+          </div>
         ) : (
-          orders.map((order) => (
-            <Link
-              key={order.id}
-              href={`/daftar/${order.id}`} // Nanti kita buat halaman ini
-              className="border border-gray-200 p-4 rounded-xl shadow-sm hover:shadow-md transition bg-white"
-            >
-              <h2 className="text-xl font-semibold text-gray-800">{order.title}</h2>
-              <p className="text-sm text-gray-500 mt-1">Status: {order.status}</p>
-            </Link>
-          ))
+          <ul className="space-y-3">
+            {orders.map((order) => (
+              <li key={order.id}>
+                <Link
+                  href={`/daftar/${order.id}`}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm transition hover:border-stone-300 active:scale-[0.99]"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-stone-900">
+                      {order.title}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <StatusBadge status={order.status} />
+                      <span className="text-[11px] text-stone-400">
+                        {formatTanggal(order.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight
+                    className="h-5 w-5 shrink-0 text-stone-300"
+                    strokeWidth={1.75}
+                  />
+                </Link>
+              </li>
+            ))}
+          </ul>
         )}
-      </div>
-    </div>
-  )
+      </section>
+    </main>
+  );
 }
