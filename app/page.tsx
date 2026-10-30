@@ -3,7 +3,13 @@
 import { createClient } from "@/lib/supabase";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, ChevronRight, ShoppingBasket } from "lucide-react";
+import {
+  Plus,
+  ChevronRight,
+  ShoppingBasket,
+  CalendarDays,
+  ClipboardList,
+} from "lucide-react";
 import StatusBadge from "@/app/components/StatusBadge";
 
 type Order = {
@@ -23,9 +29,13 @@ function formatTanggal(iso: string) {
 
 function CardSkeleton() {
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-4">
-      <div className="h-4 w-1/2 animate-pulse rounded bg-stone-100" />
-      <div className="mt-2 h-3 w-1/3 animate-pulse rounded bg-stone-100" />
+    <div className="flex items-center gap-4 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+      <div className="h-12 w-12 shrink-0 animate-pulse rounded-full bg-stone-100" />
+      <div className="min-w-0 flex-1">
+        <div className="h-4 w-2/3 animate-pulse rounded bg-stone-100" />
+        <div className="mt-3 h-6 w-28 animate-pulse rounded-full bg-stone-100" />
+        <div className="mt-3 h-3 w-24 animate-pulse rounded bg-stone-100" />
+      </div>
     </div>
   );
 }
@@ -51,85 +61,108 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="mx-auto min-h-dvh max-w-lg px-4 pb-10 pt-8">
-      <header className="mb-8">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-green-700">
-          Belanja Pasar
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-900">
-          Daftar Belanja Saya
-        </h1>
-        <p className="mt-1 text-sm leading-6 text-stone-500">
-          Buat daftar, kirim ke tukang sayur, dan pantau harganya.
-        </p>
+    <div className="min-h-dvh bg-stone-50">
+      {/* Header hijau */}
+      <header className="rounded-b-3xl bg-gradient-to-br from-emerald-600 to-green-800 px-5 pb-8 pt-8 shadow-md">
+        <div className="mx-auto max-w-lg">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20">
+              <ShoppingBasket className="h-6 w-6 text-white" strokeWidth={2} />
+            </div>
+            <p className="text-lg font-bold tracking-tight text-white">
+              Belanja Pasar
+            </p>
+          </div>
+
+          <h1 className="mt-6 text-3xl font-extrabold leading-tight tracking-tight text-white">
+            Daftar Belanja Saya
+          </h1>
+          <p className="mt-2 text-base leading-7 text-emerald-50">
+            Buat daftar, kirim ke tukang sayur, dan pantau harganya.
+          </p>
+
+          <Link
+            href="/buat-daftar"
+            className="mt-6 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 px-4 text-lg font-bold text-stone-900 shadow-lg shadow-green-900/20 transition hover:bg-amber-300 active:scale-[0.98]"
+          >
+            <Plus className="h-6 w-6" strokeWidth={2.5} />
+            Buat Daftar Baru
+          </Link>
+        </div>
       </header>
 
-      <Link
-        href="/buat-daftar"
-        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-green-800 px-4 text-sm font-medium text-white transition hover:bg-green-900 active:scale-[0.99]"
-      >
-        <Plus className="h-5 w-5" strokeWidth={1.75} />
-        Buat Daftar Baru
-      </Link>
-
-      <section className="mt-8">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-stone-900">
-            Daftar Terbaru
-          </h2>
-          <span className="text-xs text-stone-400">
-            {loading ? "…" : `${orders.length} daftar`}
-          </span>
-        </div>
-
-        {loading ? (
-          <div className="space-y-3">
-            <CardSkeleton />
-            <CardSkeleton />
-            <CardSkeleton />
+      <main className="mx-auto max-w-lg px-4 pb-12 pt-7">
+        <section>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-stone-900">
+              <ClipboardList className="h-5 w-5 text-emerald-700" />
+              Daftar Terbaru
+            </h2>
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-800">
+              {loading ? "…" : `${orders.length} daftar`}
+            </span>
           </div>
-        ) : orders.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-stone-300 bg-white px-6 py-10 text-center">
-            <ShoppingBasket
-              className="mx-auto h-8 w-8 text-stone-300"
-              strokeWidth={1.5}
-            />
-            <p className="mt-3 text-sm text-stone-500">
-              Belum ada daftar belanja.
-            </p>
-            <p className="mt-1 text-xs text-stone-400">
-              Mulai dengan menekan tombol di atas.
-            </p>
-          </div>
-        ) : (
-          <ul className="space-y-3">
-            {orders.map((order) => (
-              <li key={order.id}>
-                <Link
-                  href={`/daftar/${order.id}`}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm transition hover:border-stone-300 active:scale-[0.99]"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-stone-900">
-                      {order.title}
-                    </p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <StatusBadge status={order.status} />
-                      <span className="text-[11px] text-stone-400">
-                        {formatTanggal(order.created_at)}
-                      </span>
+
+          {loading ? (
+            <div className="space-y-3">
+              <CardSkeleton />
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          ) : orders.length === 0 ? (
+            <div className="rounded-3xl border-2 border-dashed border-emerald-200 bg-white px-6 py-12 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50">
+                <ShoppingBasket
+                  className="h-8 w-8 text-emerald-600"
+                  strokeWidth={1.75}
+                />
+              </div>
+              <p className="mt-4 text-lg font-bold text-stone-800">
+                Belum ada daftar belanja
+              </p>
+              <p className="mt-1 text-base text-stone-500">
+                Yuk buat yang pertama! Tekan tombol kuning di atas.
+              </p>
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {orders.map((order) => (
+                <li key={order.id}>
+                  <Link
+                    href={`/daftar/${order.id}`}
+                    className="flex items-center gap-4 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 hover:shadow-md active:scale-[0.98]"
+                  >
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-50">
+                      <ShoppingBasket
+                        className="h-6 w-6 text-emerald-700"
+                        strokeWidth={1.75}
+                      />
                     </div>
-                  </div>
-                  <ChevronRight
-                    className="h-5 w-5 shrink-0 text-stone-300"
-                    strokeWidth={1.75}
-                  />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </main>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-base font-bold text-stone-900">
+                        {order.title}
+                      </p>
+                      <div className="mt-2">
+                        <StatusBadge status={order.status} />
+                      </div>
+                      <p className="mt-2 flex items-center gap-1.5 text-sm text-stone-500">
+                        <CalendarDays className="h-4 w-4" />
+                        {formatTanggal(order.created_at)}
+                      </p>
+                    </div>
+
+                    <ChevronRight
+                      className="h-6 w-6 shrink-0 text-stone-300"
+                      strokeWidth={2}
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </main>
+    </div>
   );
 }
