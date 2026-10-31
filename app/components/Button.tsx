@@ -1,10 +1,11 @@
 import { Loader2 } from "lucide-react";
 
 const variants = {
-  primary: "bg-green-800 text-white hover:bg-green-900",
+  primary: "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700",
+  accent: "bg-amber-400 text-stone-900 shadow-sm hover:bg-amber-300",
   secondary:
-    "border border-stone-300 bg-white text-stone-700 hover:bg-stone-50",
-  danger: "bg-red-600 text-white hover:bg-red-700",
+    "border-2 border-stone-300 bg-white text-stone-700 hover:bg-stone-50",
+  danger: "bg-red-600 text-white shadow-sm hover:bg-red-700",
 };
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -26,11 +27,9 @@ export default function Button({
       type={type}
       {...props}
       disabled={disabled || loading}
-      className={`inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${className}`}
+      className={`inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl px-5 text-base font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${className}`}
     >
-      {loading && (
-        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
-      )}
+      {loading && <Loader2 className="h-5 w-5 animate-spin" strokeWidth={2} />}
       {children}
     </button>
   );

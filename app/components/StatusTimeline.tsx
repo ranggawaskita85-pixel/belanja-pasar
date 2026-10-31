@@ -29,13 +29,13 @@ export default function StatusTimeline({ status }: { status: string }) {
           i === 0
             ? "opacity-0"
             : isPast || isCurrent
-              ? "bg-green-700"
+              ? "bg-emerald-600"
               : "bg-stone-200";
         const lineRight =
           i === STEPS.length - 1
             ? "opacity-0"
             : isPast
-              ? "bg-green-700"
+              ? "bg-emerald-600"
               : "bg-stone-200";
 
         return (
@@ -45,29 +45,29 @@ export default function StatusTimeline({ status }: { status: string }) {
             aria-current={isCurrent ? "step" : undefined}
           >
             <div className="flex w-full items-center">
-              <div className={`h-px flex-1 ${lineLeft}`} />
+              <div className={`h-0.5 flex-1 ${lineLeft}`} />
               <div
-                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-medium transition ${
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold transition ${
                   isPast
-                    ? "border-green-700 bg-green-700 text-white"
+                    ? "border-emerald-600 bg-emerald-600 text-white"
                     : isCurrent
-                      ? "border-green-700 bg-white text-green-700 ring-4 ring-green-700/10"
+                      ? "border-emerald-600 bg-white text-emerald-700 ring-4 ring-emerald-600/15"
                       : "border-stone-300 bg-white text-stone-400"
                 }`}
               >
                 {isPast ? (
-                  <Check className="h-3 w-3" strokeWidth={2.5} />
+                  <Check className="h-5 w-5" strokeWidth={3} />
                 ) : (
                   i + 1
                 )}
               </div>
-              <div className={`h-px flex-1 ${lineRight}`} />
+              <div className={`h-0.5 flex-1 ${lineRight}`} />
             </div>
             <span
-              className={`mt-2 text-center text-[10px] leading-tight ${
+              className={`mt-2 text-center text-sm leading-tight ${
                 isPast || isCurrent
-                  ? "font-medium text-stone-800"
-                  : "text-stone-400"
+                  ? "font-bold text-stone-800"
+                  : "font-medium text-stone-400"
               }`}
             >
               {step.label}
