@@ -3,20 +3,17 @@
 import { createClient } from "@/lib/supabase";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import {
-  Store,
-  Send,
-  PackageCheck,
-  Tag,
-  ShoppingBasket,
-  FileQuestion,
-  Info,
-  Hourglass,
-  PartyPopper,
-} from "lucide-react";
+import { Store, Send, PackageCheck, Hourglass } from "lucide-react";
 import StatusBadge from "@/app/components/StatusBadge";
 import StatusTimeline from "@/app/components/StatusTimeline";
 import Button from "@/app/components/Button";
+import {
+  AppBar,
+  Panel,
+  BottomBar,
+  TotalLine,
+  Notice,
+} from "@/app/components/Shell";
 import { useUI } from "@/app/components/UIProvider";
 import { groupByCategory } from "@/app/components/itemUtils";
 
@@ -40,60 +37,21 @@ function formatRupiah(value: number) {
   return `Rp ${value.toLocaleString("id-ID")}`;
 }
 
-function CardSkeleton() {
+function RowSkeleton() {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-      <div className="h-5 w-1/3 animate-pulse rounded bg-stone-100" />
-      <div className="mt-4 space-y-3">
-        <div className="h-4 w-full animate-pulse rounded bg-stone-100" />
-        <div className="h-4 w-2/3 animate-pulse rounded bg-stone-100" />
-      </div>
+    <div className="border-b border-zinc-200 bg-white px-4 py-3">
+      <div className="h-4 w-1/2 animate-pulse rounded-sm bg-zinc-200" />
+      <div className="mt-2 h-3 w-1/4 animate-pulse rounded-sm bg-zinc-200" />
     </div>
   );
 }
 
-function Header({
-  title,
-  status,
-  loading,
-  note,
-}: {
-  title?: string;
-  status?: string;
-  loading?: boolean;
-  note?: string;
-}) {
-  return (
-    <header className="rounded-b-3xl bg-gradient-to-br from-emerald-600 to-green-800 px-5 pb-7 pt-8 shadow-md">
-      <div className="mx-auto max-w-lg">
-        <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.14em] text-emerald-100">
-          <Store className="h-5 w-5" strokeWidth={2} />
-          Untuk Tukang Sayur
-        </div>
-        {loading ? (
-          <>
-            <div className="mt-4 h-8 w-2/3 animate-pulse rounded-lg bg-white/25" />
-            <div className="mt-4 h-9 w-44 animate-pulse rounded-full bg-white/25" />
-          </>
-        ) : (
-          <>
-            <h1 className="mt-3 break-words text-2xl font-extrabold leading-tight tracking-tight text-white">
-              {title}
-            </h1>
-            {status && (
-              <div className="mt-3 inline-flex rounded-full bg-white p-1 shadow-sm">
-                <StatusBadge status={status} />
-              </div>
-            )}
-            {note && (
-              <p className="mt-3 text-base leading-7 text-emerald-50">{note}</p>
-            )}
-          </>
-        )}
-      </div>
-    </header>
-  );
-}
+const VendorTag = (
+  <div className="flex items-center gap-1.5 pr-3 text-xs font-bold uppercase tracking-wide text-emerald-100">
+    <Store className="h-4 w-4" strokeWidth={2} />
+    Tukang Sayur
+  </div>
+);
 
 export default function HalamanVendor() {
   const [order, setOrder] = useState<Order | null>(null);
@@ -219,12 +177,16 @@ export default function HalamanVendor() {
 
   if (loading) {
     return (
-      <div className="min-h-dvh bg-stone-50">
-        <Header loading />
-        <main className="mx-auto max-w-lg space-y-3 px-4 pb-10 pt-5">
-          <CardSkeleton />
-          <CardSkeleton />
-          <CardSkeleton />
+      <div className="min-h-dvh bg-zinc-100">
+        <AppBar title="Pesanan Masuk" right={VendorTag} />
+        <main className="mx-auto max-w-lg space-y-3">
+          <div className="border-b border-zinc-300 bg-white px-4 py-4">
+            <div className="h-6 w-2/3 animate-pulse rounded-sm bg-zinc-200" />
+            <div className="mt-3 h-6 w-36 animate-pulse rounded-sm bg-zinc-200" />
+          </div>
+          <RowSkeleton />
+          <RowSkeleton />
+          <RowSkeleton />
         </main>
       </div>
     );
@@ -232,21 +194,19 @@ export default function HalamanVendor() {
 
   if (!order) {
     return (
-      <div className="min-h-dvh bg-stone-50">
-        <Header title="Link tidak ditemukan" />
-        <main className="mx-auto max-w-lg px-4 pb-10 pt-6">
-          <div className="rounded-3xl border-2 border-dashed border-stone-300 bg-white px-6 py-10 text-center">
-            <FileQuestion
-              className="mx-auto h-12 w-12 text-stone-300"
-              strokeWidth={1.5}
-            />
-            <p className="mt-4 text-lg font-bold text-stone-800">
-              Link tidak valid atau sudah kedaluwarsa
-            </p>
-            <p className="mt-1 text-base text-stone-500">
-              Minta pembeli mengirim ulang link yang benar.
-            </p>
-          </div>
+      <div className="min-h-dvh bg-zinc-100">
+        <AppBar title="Pesanan Masuk" right={VendorTag} />
+        <main className="mx-auto max-w-lg pt-3">
+          <Panel>
+            <div className="px-4 py-8 text-center">
+              <p className="text-lg font-bold text-zinc-900">
+                Link tidak valid atau sudah kedaluwarsa
+              </p>
+              <p className="mt-1 text-base text-zinc-500">
+                Minta pembeli mengirim ulang link yang benar.
+              </p>
+            </div>
+          </Panel>
         </main>
       </div>
     );
@@ -262,74 +222,69 @@ export default function HalamanVendor() {
   const bisaIsiHarga = order.status === "sent";
 
   return (
-    <div className="min-h-dvh bg-stone-50">
-      <Header
-        title={order.title}
-        status={order.status}
-        note={
-          bisaIsiHarga
-            ? "Isi harga setiap barang. Kosongkan jika barang tidak tersedia."
-            : undefined
-        }
-      />
+    <div className="min-h-dvh bg-zinc-100 pb-40">
+      <AppBar title="Pesanan Masuk" right={VendorTag} />
 
-      <main className="mx-auto max-w-lg space-y-3 px-4 pb-12 pt-5">
+      <main className="mx-auto max-w-lg space-y-3">
+        <div className="border-b border-zinc-300 bg-white px-4 py-4">
+          <h1 className="break-words text-xl font-bold text-zinc-900">
+            {order.title}
+          </h1>
+          <div className="mt-2">
+            <StatusBadge status={order.status} />
+          </div>
+          {bisaIsiHarga && (
+            <p className="mt-3 text-base leading-6 text-zinc-600">
+              Isi harga setiap barang. Kosongkan jika barang tidak tersedia.
+            </p>
+          )}
+        </div>
+
         {bisaIsiHarga && revisi && (
-          <section className="flex items-start gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-base leading-6 text-amber-900">
-            <Info className="mt-0.5 h-5 w-5 shrink-0" />
-            <span>
-              Pembeli mengubah pesanan. Barang yang diubah atau baru harganya
-              kosong, mohon isi ulang. Cek juga harga lainnya.
-            </span>
-          </section>
+          <Notice tone="warn">
+            Pembeli mengubah pesanan. Barang yang diubah atau baru harganya
+            kosong, mohon isi ulang. Cek juga harga lainnya.
+          </Notice>
         )}
 
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <StatusTimeline status={order.status} />
-        </section>
-
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-stone-900">
-              <ShoppingBasket className="h-5 w-5 text-emerald-700" />
-              Daftar Barang
-            </h2>
-            <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-800">
-              {items.length} barang
-            </span>
+        <Panel>
+          <div className="px-4 py-3">
+            <StatusTimeline status={order.status} />
           </div>
+        </Panel>
 
+        <Panel title="Daftar Barang" aside={`${items.length} barang`}>
           {groups.map((group, gi) => (
-            <div key={`${group.category ?? "_"}-${gi}`} className="mt-4">
+            <div key={`${group.category ?? "_"}-${gi}`}>
               {hasCategory && (
-                <h3 className="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-emerald-800">
-                  <Tag className="h-4 w-4" />
+                <div className="bg-zinc-100 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-700">
                   {group.category ?? "Lainnya"}
-                </h3>
+                </div>
               )}
-              <ul className="divide-y divide-stone-100">
+              <ul className="divide-y divide-zinc-200">
                 {group.items.map((item) => {
                   const perluDiisi =
                     bisaIsiHarga && revisi && !(Number(item.price) > 0);
                   return (
-                    <li key={item.id} className="py-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="break-words text-lg font-bold text-stone-900">
-                            {item.name}
-                          </p>
-                          <p className="mt-0.5 text-base text-stone-500">
-                            {item.qty} {item.unit}
-                          </p>
-                        </div>
+                    <li
+                      key={item.id}
+                      className="flex items-center justify-between gap-3 px-4 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-base font-semibold text-zinc-900">
+                          {item.name}
+                        </p>
+                        <p className="mt-0.5 text-sm tabular-nums text-zinc-500">
+                          {item.qty} {item.unit}
+                        </p>
                         {perluDiisi && (
-                          <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-sm font-semibold text-amber-900">
-                            Isi harga
-                          </span>
+                          <p className="mt-1 text-xs font-bold uppercase tracking-wide text-amber-700">
+                            Perlu diisi
+                          </p>
                         )}
                       </div>
 
-                      <div className="mt-2">
+                      <div className="w-40 shrink-0">
                         <label
                           htmlFor={`price-${item.id}`}
                           className="sr-only"
@@ -337,7 +292,7 @@ export default function HalamanVendor() {
                           Harga {item.name}
                         </label>
                         <div className="relative">
-                          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg font-semibold text-stone-400">
+                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-zinc-400">
                             Rp
                           </span>
                           <input
@@ -351,10 +306,10 @@ export default function HalamanVendor() {
                               handlePriceChange(item.id, e.target.value)
                             }
                             disabled={!bisaIsiHarga}
-                            className={`h-14 w-full rounded-xl border-2 bg-white pl-12 pr-4 text-right text-xl font-bold text-stone-900 placeholder:text-stone-300 focus:border-emerald-600 focus:outline-none focus:ring-4 focus:ring-emerald-600/15 disabled:bg-stone-100 disabled:text-stone-500 ${
+                            className={`h-12 w-full rounded-md border pl-9 pr-3 text-right text-lg font-bold tabular-nums text-zinc-900 placeholder:text-zinc-300 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/25 disabled:bg-zinc-100 disabled:text-zinc-500 ${
                               perluDiisi
-                                ? "border-amber-400"
-                                : "border-stone-300"
+                                ? "border-amber-500 bg-amber-50"
+                                : "border-zinc-400 bg-white"
                             }`}
                           />
                         </div>
@@ -365,57 +320,52 @@ export default function HalamanVendor() {
               </ul>
             </div>
           ))}
-        </section>
+        </Panel>
 
-        <section className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-base font-bold text-emerald-900">Total</span>
-            <span className="text-2xl font-extrabold text-emerald-900">
-              {formatRupiah(total)}
-            </span>
-          </div>
-        </section>
+        {order.status === "priced" && (
+          <Notice tone="warn">
+            Harga sudah dikirim. Menunggu persetujuan pembeli. Jika pembeli
+            mengubah pesanan, buka link ini lagi untuk menghitung ulang.
+          </Notice>
+        )}
 
-        <section className="mt-3 space-y-3">
-          {order.status === "sent" && (
-            <Button onClick={handleSimpanHarga} loading={simpanLoading}>
-              <Send className="h-5 w-5" strokeWidth={2.25} />
-              {revisi ? "Kirim Harga Baru ke Pembeli" : "Kirim Harga ke Pembeli"}
-            </Button>
-          )}
+        {order.status === "approved" && (
+          <Notice tone="info">
+            Pembeli menyetujui harga. Menunggu transfer.
+          </Notice>
+        )}
 
-          {order.status === "priced" && (
-            <div className="flex items-start gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-base leading-6 text-amber-900">
-              <Hourglass className="mt-0.5 h-5 w-5 shrink-0" />
-              <span>
-                Harga sudah dikirim. Menunggu persetujuan pembeli. Jika pembeli
-                mengubah pesanan, buka link ini lagi untuk menghitung ulang.
-              </span>
-            </div>
-          )}
-
-          {order.status === "approved" && (
-            <div className="flex items-start gap-3 rounded-2xl bg-indigo-50 px-4 py-3 text-base leading-6 text-indigo-900">
-              <Hourglass className="mt-0.5 h-5 w-5 shrink-0" />
-              <span>Pembeli menyetujui harga. Menunggu transfer.</span>
-            </div>
-          )}
-
-          {order.status === "paid" && (
-            <Button onClick={handleSelesai} loading={simpanLoading}>
-              <PackageCheck className="h-5 w-5" strokeWidth={2.25} />
-              Konfirmasi Barang Sudah Dikirim
-            </Button>
-          )}
-
-          {order.status === "completed" && (
-            <div className="flex items-center justify-center gap-2 rounded-2xl bg-green-700 px-4 py-5 text-center text-lg font-bold text-white">
-              <PartyPopper className="h-6 w-6" />
-              Pesanan selesai. Terima kasih!
-            </div>
-          )}
-        </section>
+        {order.status === "completed" && (
+          <Notice tone="ok">Pesanan selesai. Terima kasih!</Notice>
+        )}
       </main>
+
+      <BottomBar>
+        <TotalLine label="Total" value={formatRupiah(total)} />
+
+        {order.status === "sent" && (
+          <Button onClick={handleSimpanHarga} loading={simpanLoading}>
+            <Send className="h-5 w-5" strokeWidth={2.25} />
+            {revisi ? "Kirim Harga Baru ke Pembeli" : "Kirim Harga ke Pembeli"}
+          </Button>
+        )}
+
+        {order.status === "paid" && (
+          <Button onClick={handleSelesai} loading={simpanLoading}>
+            <PackageCheck className="h-5 w-5" strokeWidth={2.25} />
+            Konfirmasi Barang Sudah Dikirim
+          </Button>
+        )}
+
+        {(order.status === "priced" || order.status === "approved") && (
+          <div className="flex items-center gap-2 text-base text-zinc-600">
+            <Hourglass className="h-5 w-5" />
+            {order.status === "priced"
+              ? "Menunggu persetujuan pembeli"
+              : "Menunggu transfer pembeli"}
+          </div>
+        )}
+      </BottomBar>
     </div>
   );
 }

@@ -7,26 +7,28 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  ChevronLeft,
   Copy,
   Check,
   MessageCircle,
   Link2,
   Wallet,
-  PackageCheck,
   Pencil,
   Plus,
   Trash2,
-  Tag,
-  ShoppingBasket,
-  FileQuestion,
-  Info,
-  PartyPopper,
   Hourglass,
+  PackageCheck,
 } from "lucide-react";
 import StatusBadge from "@/app/components/StatusBadge";
 import StatusTimeline from "@/app/components/StatusTimeline";
 import Button from "@/app/components/Button";
+import {
+  AppBar,
+  Panel,
+  BottomBar,
+  TotalLine,
+  Notice,
+  inputCls,
+} from "@/app/components/Shell";
 import { useUI } from "@/app/components/UIProvider";
 import { SATUAN, groupByCategory } from "@/app/components/itemUtils";
 
@@ -57,63 +59,29 @@ type EditItem = {
   category: string | null;
 };
 
-const inputCls =
-  "h-12 w-full rounded-xl border-2 border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none focus:ring-4 focus:ring-emerald-600/15";
-
 function formatRupiah(value: number) {
   return `Rp ${value.toLocaleString("id-ID")}`;
 }
 
-function CardSkeleton() {
+function RowSkeleton() {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-      <div className="h-5 w-1/3 animate-pulse rounded bg-stone-100" />
-      <div className="mt-4 space-y-3">
-        <div className="h-4 w-full animate-pulse rounded bg-stone-100" />
-        <div className="h-4 w-2/3 animate-pulse rounded bg-stone-100" />
-      </div>
+    <div className="border-b border-zinc-200 bg-white px-4 py-3">
+      <div className="h-4 w-1/2 animate-pulse rounded-sm bg-zinc-200" />
+      <div className="mt-2 h-3 w-1/4 animate-pulse rounded-sm bg-zinc-200" />
     </div>
   );
 }
 
-function Header({
-  title,
-  status,
-  loading,
-}: {
-  title?: string;
-  status?: string;
-  loading?: boolean;
-}) {
+function OrderTitle({ title, status }: { title: string; status?: string }) {
   return (
-    <header className="rounded-b-3xl bg-gradient-to-br from-emerald-600 to-green-800 px-5 pb-7 pt-6 shadow-md">
-      <div className="mx-auto max-w-lg">
-        <Link
-          href="/"
-          className="inline-flex min-h-11 items-center gap-1 text-base font-semibold text-emerald-50 hover:text-white"
-        >
-          <ChevronLeft className="h-5 w-5" strokeWidth={2.25} />
-          Kembali
-        </Link>
-        {loading ? (
-          <>
-            <div className="mt-3 h-8 w-2/3 animate-pulse rounded-lg bg-white/25" />
-            <div className="mt-4 h-9 w-44 animate-pulse rounded-full bg-white/25" />
-          </>
-        ) : (
-          <>
-            <h1 className="mt-3 break-words text-2xl font-extrabold leading-tight tracking-tight text-white">
-              {title}
-            </h1>
-            {status && (
-              <div className="mt-3 inline-flex rounded-full bg-white p-1 shadow-sm">
-                <StatusBadge status={status} />
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </header>
+    <div className="border-b border-zinc-300 bg-white px-4 py-4">
+      <h1 className="break-words text-xl font-bold text-zinc-900">{title}</h1>
+      {status && (
+        <div className="mt-2">
+          <StatusBadge status={status} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -386,7 +354,8 @@ export default function DetailDaftar() {
           price: null,
         })
         .eq("id", edited.id);
-      if (error) return gagal("Gagal menyimpan perubahan: " + error.message + ".");
+      if (error)
+        return gagal("Gagal menyimpan perubahan: " + error.message + ".");
     }
 
     // 3. Tambahkan barang baru
@@ -410,7 +379,8 @@ export default function DetailDaftar() {
       .from("orders")
       .update({ status: "sent" })
       .eq("id", orderId);
-    if (errOrder) return gagal("Gagal mengirim perubahan: " + errOrder.message + ".");
+    if (errOrder)
+      return gagal("Gagal mengirim perubahan: " + errOrder.message + ".");
 
     await muatUlangItems(orderId);
     setOrder({ ...order, status: "sent" });
@@ -425,12 +395,16 @@ export default function DetailDaftar() {
 
   if (loading) {
     return (
-      <div className="min-h-dvh bg-stone-50">
-        <Header loading />
-        <main className="mx-auto max-w-lg space-y-3 px-4 pb-10 pt-5">
-          <CardSkeleton />
-          <CardSkeleton />
-          <CardSkeleton />
+      <div className="min-h-dvh bg-zinc-100">
+        <AppBar title="Detail Daftar" backHref="/" />
+        <main className="mx-auto max-w-lg space-y-3">
+          <div className="border-b border-zinc-300 bg-white px-4 py-4">
+            <div className="h-6 w-2/3 animate-pulse rounded-sm bg-zinc-200" />
+            <div className="mt-3 h-6 w-36 animate-pulse rounded-sm bg-zinc-200" />
+          </div>
+          <RowSkeleton />
+          <RowSkeleton />
+          <RowSkeleton />
         </main>
       </div>
     );
@@ -438,27 +412,25 @@ export default function DetailDaftar() {
 
   if (!order) {
     return (
-      <div className="min-h-dvh bg-stone-50">
-        <Header title="Daftar tidak ditemukan" />
-        <main className="mx-auto max-w-lg px-4 pb-10 pt-6">
-          <div className="rounded-3xl border-2 border-dashed border-stone-300 bg-white px-6 py-10 text-center">
-            <FileQuestion
-              className="mx-auto h-12 w-12 text-stone-300"
-              strokeWidth={1.5}
-            />
-            <p className="mt-4 text-lg font-bold text-stone-800">
-              Daftar ini tidak ditemukan
-            </p>
-            <p className="mt-1 text-base text-stone-500">
-              Mungkin sudah dihapus atau alamatnya keliru.
-            </p>
-            <Link
-              href="/"
-              className="mt-5 inline-flex min-h-12 items-center justify-center rounded-2xl bg-emerald-600 px-6 text-base font-bold text-white hover:bg-emerald-700"
-            >
-              Kembali ke Beranda
-            </Link>
-          </div>
+      <div className="min-h-dvh bg-zinc-100">
+        <AppBar title="Detail Daftar" backHref="/" />
+        <main className="mx-auto max-w-lg pt-3">
+          <Panel>
+            <div className="px-4 py-8 text-center">
+              <p className="text-lg font-bold text-zinc-900">
+                Daftar tidak ditemukan
+              </p>
+              <p className="mt-1 text-base text-zinc-500">
+                Mungkin sudah dihapus atau alamatnya keliru.
+              </p>
+              <Link
+                href="/"
+                className="mt-5 inline-flex h-12 items-center justify-center rounded-md bg-emerald-700 px-6 text-base font-semibold text-white hover:bg-emerald-800"
+              >
+                Kembali ke Beranda
+              </Link>
+            </div>
+          </Panel>
         </main>
       </div>
     );
@@ -471,7 +443,8 @@ export default function DetailDaftar() {
 
   // Pesanan yang sedang direvisi: sudah pernah ada harga, atau baru saja diubah
   const isRevisi =
-    revised || (order.status === "sent" && items.some((i) => Number(i.price) > 0));
+    revised ||
+    (order.status === "sent" && items.some((i) => Number(i.price) > 0));
 
   const waText = isRevisi
     ? `Halo, daftar belanja saya sudah saya ubah. Mohon hitung ulang harganya ya: ${linkVendor}`
@@ -486,68 +459,53 @@ export default function DetailDaftar() {
   const hasEditCategory = editGroups.some((g) => g.category);
   const kategoriTersedia = Array.from(
     new Set(
-      editItems
-        .map((i) => i.category)
-        .filter((c): c is string => Boolean(c))
+      editItems.map((i) => i.category).filter((c): c is string => Boolean(c))
     )
   );
 
   return (
-    <div className="min-h-dvh bg-stone-50">
-      <Header title={order.title} status={order.status} />
+    <div className="min-h-dvh bg-zinc-100 pb-44">
+      <AppBar title="Detail Daftar" backHref="/" />
 
-      <main className="mx-auto max-w-lg space-y-3 px-4 pb-12 pt-5">
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <StatusTimeline status={order.status} />
-        </section>
+      <main className="mx-auto max-w-lg space-y-3">
+        <OrderTitle title={order.title} status={order.status} />
 
-        {/* ---------- MODE UBAH PESANAN ---------- */}
+        <Panel>
+          <div className="px-4 py-3">
+            <StatusTimeline status={order.status} />
+          </div>
+        </Panel>
+
         {editing ? (
+          /* ---------- MODE UBAH PESANAN ---------- */
           <>
-            <section className="flex items-start gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-base leading-6 text-amber-900">
-              <Info className="mt-0.5 h-5 w-5 shrink-0" />
-              <span>
-                Ubah jumlah, hapus, atau tambah barang. Setelah dikirim, tukang
-                sayur akan menghitung ulang harganya.
-              </span>
-            </section>
+            <Notice tone="warn">
+              Ubah jumlah, hapus, atau tambah barang. Setelah dikirim, tukang
+              sayur akan menghitung ulang harganya.
+            </Notice>
 
-            <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-lg font-bold text-stone-900">
-                  <Pencil className="h-5 w-5 text-emerald-700" />
-                  Ubah Barang
-                </h2>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-800">
-                  {editItems.length} barang
-                </span>
-              </div>
-
+            <Panel title="Ubah Barang" aside={`${editItems.length} barang`}>
               {editItems.length === 0 && (
-                <p className="mt-4 rounded-xl border-2 border-dashed border-stone-200 px-4 py-6 text-center text-base text-stone-500">
+                <p className="px-4 py-6 text-center text-base text-zinc-500">
                   Semua barang dihapus. Tambahkan minimal satu barang.
                 </p>
               )}
 
               {editGroups.map((group, gi) => (
-                <div key={`${group.category ?? "_"}-${gi}`} className="mt-4">
+                <div key={`${group.category ?? "_"}-${gi}`}>
                   {hasEditCategory && (
-                    <h3 className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-emerald-800">
-                      <Tag className="h-4 w-4" />
+                    <div className="bg-zinc-100 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-700">
                       {group.category ?? "Lainnya"}
-                    </h3>
+                    </div>
                   )}
-                  <ul className="space-y-3">
+                  <ul className="divide-y divide-zinc-200">
                     {group.items.map((e) => {
                       const opsiSatuan = SATUAN.includes(e.unit)
                         ? SATUAN
                         : [...SATUAN, e.unit];
                       return (
-                        <li
-                          key={e.key}
-                          className="rounded-xl border border-stone-200 bg-stone-50 p-3"
-                        >
-                          <div className="flex items-start gap-2">
+                        <li key={e.key} className="space-y-2 px-4 py-3">
+                          <div className="flex items-center gap-2">
                             <input
                               type="text"
                               aria-label="Nama barang"
@@ -561,12 +519,12 @@ export default function DetailDaftar() {
                               type="button"
                               onClick={() => hapusEditItem(e.key)}
                               aria-label={`Hapus ${e.name}`}
-                              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-2 border-red-200 bg-white text-red-600 transition hover:bg-red-50 active:scale-95"
+                              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-zinc-300 text-zinc-500 hover:bg-red-50 hover:text-red-700 active:bg-red-100"
                             >
                               <Trash2 className="h-5 w-5" />
                             </button>
                           </div>
-                          <div className="mt-2 grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-2 gap-2">
                             <input
                               type="number"
                               inputMode="decimal"
@@ -577,7 +535,7 @@ export default function DetailDaftar() {
                               onChange={(ev) =>
                                 ubahEditItem(e.key, { qty: ev.target.value })
                               }
-                              className={inputCls}
+                              className={`${inputCls} tabular-nums`}
                             />
                             <select
                               aria-label="Satuan"
@@ -600,15 +558,10 @@ export default function DetailDaftar() {
                   </ul>
                 </div>
               ))}
-            </section>
+            </Panel>
 
-            <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-              <h2 className="flex items-center gap-2 text-lg font-bold text-stone-900">
-                <Plus className="h-5 w-5 text-emerald-700" />
-                Tambah Barang Baru
-              </h2>
-
-              <div className="mt-3 space-y-3">
+            <Panel title="Tambah Barang Baru">
+              <div className="space-y-3 px-4 py-3">
                 <input
                   type="text"
                   aria-label="Nama barang baru"
@@ -627,7 +580,7 @@ export default function DetailDaftar() {
                     placeholder="Jumlah"
                     value={newQty}
                     onChange={(e) => setNewQty(e.target.value)}
-                    className={inputCls}
+                    className={`${inputCls} tabular-nums`}
                   />
                   <select
                     aria-label="Satuan barang baru"
@@ -662,10 +615,10 @@ export default function DetailDaftar() {
                             type="button"
                             onClick={() => setNewCategory(aktif ? "" : k)}
                             aria-pressed={aktif}
-                            className={`min-h-10 rounded-full border-2 px-3 text-sm font-semibold transition active:scale-95 ${
+                            className={`h-10 rounded-md border px-3 text-sm font-semibold transition ${
                               aktif
-                                ? "border-emerald-600 bg-emerald-600 text-white"
-                                : "border-stone-300 bg-white text-stone-700"
+                                ? "border-emerald-700 bg-emerald-700 text-white"
+                                : "border-zinc-400 bg-white text-zinc-700"
                             }`}
                           >
                             {k}
@@ -681,201 +634,218 @@ export default function DetailDaftar() {
                   Tambah ke Daftar
                 </Button>
               </div>
-            </section>
+            </Panel>
+          </>
+        ) : (
+          /* ---------- TAMPILAN BIASA ---------- */
+          <>
+            <Panel title="Daftar Barang" aside={`${items.length} barang`}>
+              {groups.map((group, gi) => {
+                const subtotal = group.items.reduce(
+                  (s, i) => s + (Number(i.price) || 0),
+                  0
+                );
+                return (
+                  <div key={`${group.category ?? "_"}-${gi}`}>
+                    {hasCategory && (
+                      <div className="flex items-center justify-between gap-3 bg-zinc-100 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-700">
+                        <span>{group.category ?? "Lainnya"}</span>
+                        {sudahAdaHarga && (
+                          <span className="tabular-nums">
+                            {formatRupiah(subtotal)}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <ul className="divide-y divide-zinc-200">
+                      {group.items.map((item) => (
+                        <li
+                          key={item.id}
+                          className="flex items-start justify-between gap-4 px-4 py-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="break-words text-base font-semibold text-zinc-900">
+                              {item.name}
+                            </p>
+                            <p className="mt-0.5 text-sm tabular-nums text-zinc-500">
+                              {item.qty} {item.unit}
+                            </p>
+                          </div>
+                          <p className="shrink-0 text-right text-base font-semibold tabular-nums text-zinc-900">
+                            {item.price ? (
+                              formatRupiah(Number(item.price))
+                            ) : (
+                              <span className="text-sm font-medium text-zinc-400">
+                                {sudahAdaHarga
+                                  ? "Tidak tersedia"
+                                  : "Belum ada harga"}
+                              </span>
+                            )}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </Panel>
 
-            <section className="mt-3 space-y-3">
-              <Button onClick={handleSimpanEdit} loading={actionLoading}>
-                <Check className="h-5 w-5" strokeWidth={2.5} />
-                Kirim Perubahan
-              </Button>
+            {order.status === "sent" && linkVendor && (
+              <Panel title="Link untuk Tukang Sayur">
+                <div className="space-y-3 px-4 py-3">
+                  <p className="text-base leading-6 text-zinc-600">
+                    {isRevisi
+                      ? "Kirim ulang link ini agar tukang sayur menghitung ulang harga."
+                      : "Kirim link ini agar tukang sayur bisa mengisi harga."}
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={linkVendor}
+                      aria-label="Link untuk tukang sayur"
+                      className="h-12 min-w-0 flex-1 rounded-md border border-zinc-300 bg-zinc-50 px-3 text-sm text-zinc-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCopy}
+                      className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-md border border-zinc-400 bg-white px-4 text-base font-semibold text-zinc-800 hover:bg-zinc-50 active:bg-zinc-100"
+                    >
+                      {copied ? (
+                        <Check
+                          className="h-5 w-5 text-emerald-700"
+                          strokeWidth={2.5}
+                        />
+                      ) : (
+                        <Copy className="h-5 w-5 text-zinc-500" />
+                      )}
+                      {copied ? "Tersalin" : "Salin"}
+                    </button>
+                  </div>
+                </div>
+              </Panel>
+            )}
+
+            {order.status === "sent" && (
+              <Notice tone="info">
+                {isRevisi
+                  ? "Perubahan sudah disimpan. Tunggu tukang sayur menghitung ulang harga."
+                  : "Link sudah dibuat. Tunggu tukang sayur mengisi harga."}
+              </Notice>
+            )}
+
+            {order.status === "paid" && (
+              <Notice tone="ok">
+                Transfer dikonfirmasi. Menunggu tukang sayur mengirim barang.
+              </Notice>
+            )}
+
+            {order.status === "completed" && (
+              <Notice tone="ok">Pesanan selesai. Terima kasih!</Notice>
+            )}
+          </>
+        )}
+      </main>
+
+      {/* ---------- BILAH AKSI BAWAH ---------- */}
+      <BottomBar>
+        {editing ? (
+          <>
+            <TotalLine label="Jumlah barang" value={String(editItems.length)} />
+            <div className="flex gap-2">
               <Button
                 variant="secondary"
+                block={false}
+                className="px-6"
                 onClick={batalEdit}
                 disabled={actionLoading}
               >
                 Batal
               </Button>
-            </section>
+              <Button
+                block={false}
+                className="flex-1"
+                onClick={handleSimpanEdit}
+                loading={actionLoading}
+              >
+                <Check className="h-5 w-5" strokeWidth={2.5} />
+                Kirim Perubahan
+              </Button>
+            </div>
           </>
         ) : (
           <>
-            {/* ---------- DAFTAR BARANG ---------- */}
-            <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-lg font-bold text-stone-900">
-                  <ShoppingBasket className="h-5 w-5 text-emerald-700" />
-                  Daftar Barang
-                </h2>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-800">
-                  {items.length} barang
-                </span>
-              </div>
+            {sudahAdaHarga ? (
+              <TotalLine label="Total tagihan" value={formatRupiah(total)} />
+            ) : (
+              <TotalLine label="Jumlah barang" value={String(items.length)} />
+            )}
 
-              {groups.map((group, gi) => (
-                <div key={`${group.category ?? "_"}-${gi}`} className="mt-4">
-                  {hasCategory && (
-                    <h3 className="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-emerald-800">
-                      <Tag className="h-4 w-4" />
-                      {group.category ?? "Lainnya"}
-                    </h3>
-                  )}
-                  <ul className="divide-y divide-stone-100">
-                    {group.items.map((item) => (
-                      <li
-                        key={item.id}
-                        className="flex items-start justify-between gap-4 py-3"
-                      >
-                        <div className="min-w-0">
-                          <p className="break-words text-base font-bold text-stone-900">
-                            {item.name}
-                          </p>
-                          <p className="mt-0.5 text-base text-stone-500">
-                            {item.qty} {item.unit}
-                          </p>
-                        </div>
-                        <p className="shrink-0 text-right text-base font-bold text-stone-800">
-                          {item.price ? (
-                            formatRupiah(Number(item.price))
-                          ) : (
-                            <span className="text-sm font-medium text-stone-400">
-                              {sudahAdaHarga
-                                ? "Tidak tersedia"
-                                : "Belum ada harga"}
-                            </span>
-                          )}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </section>
-
-            {sudahAdaHarga && (
-              <section className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-base font-bold text-emerald-900">
-                    Total Tagihan
-                  </span>
-                  <span className="text-2xl font-extrabold text-emerald-900">
-                    {formatRupiah(total)}
-                  </span>
-                </div>
-              </section>
+            {order.status === "draft" && (
+              <Button onClick={handleKirim} loading={actionLoading}>
+                <Link2 className="h-5 w-5" strokeWidth={2.25} />
+                Buat Link untuk Tukang Sayur
+              </Button>
             )}
 
             {order.status === "sent" && linkVendor && (
-              <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-                <h3 className="flex items-center gap-2 text-lg font-bold text-stone-900">
-                  <Link2 className="h-5 w-5 text-emerald-700" />
-                  Link untuk Tukang Sayur
-                </h3>
-                <p className="mt-1 text-base leading-6 text-stone-500">
-                  {isRevisi
-                    ? "Kirim ulang link ini agar tukang sayur menghitung ulang harga."
-                    : "Kirim link ini agar tukang sayur bisa mengisi harga."}
-                </p>
-
-                <div className="mt-3 flex gap-2">
-                  <input
-                    readOnly
-                    value={linkVendor}
-                    aria-label="Link untuk tukang sayur"
-                    className="h-12 min-w-0 flex-1 rounded-xl border-2 border-stone-200 bg-stone-50 px-3 text-sm text-stone-600"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCopy}
-                    className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-xl border-2 border-stone-300 bg-white px-4 text-base font-semibold text-stone-700 transition hover:bg-stone-50 active:scale-95"
-                  >
-                    {copied ? (
-                      <Check
-                        className="h-5 w-5 text-emerald-600"
-                        strokeWidth={2.5}
-                      />
-                    ) : (
-                      <Copy className="h-5 w-5 text-stone-500" />
-                    )}
-                    {copied ? "Tersalin" : "Salin"}
-                  </button>
-                </div>
-
-                <a
-                  href={waUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-green-600 px-5 text-base font-bold text-white shadow-sm transition hover:bg-green-700 active:scale-[0.98]"
-                >
-                  <MessageCircle className="h-5 w-5" strokeWidth={2.25} />
-                  Kirim via WhatsApp
-                </a>
-              </section>
+              <a
+                href={waUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-green-700 text-base font-semibold text-white hover:bg-green-800 active:bg-green-900"
+              >
+                <MessageCircle className="h-5 w-5" strokeWidth={2.25} />
+                Kirim via WhatsApp
+              </a>
             )}
 
-            {/* ---------- TOMBOL AKSI ---------- */}
-            <section className="mt-3 space-y-3">
-              {order.status === "draft" && (
-                <Button onClick={handleKirim} loading={actionLoading}>
-                  <Link2 className="h-5 w-5" strokeWidth={2.25} />
-                  Buat Link untuk Tukang Sayur
+            {order.status === "sent" && !linkVendor && (
+              <div className="flex items-center gap-2 text-base text-zinc-600">
+                <Hourglass className="h-5 w-5" />
+                Menunggu tukang sayur
+              </div>
+            )}
+
+            {order.status === "priced" && (
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  block={false}
+                  className="px-4"
+                  onClick={mulaiEdit}
+                  disabled={actionLoading}
+                >
+                  <Pencil className="h-5 w-5" strokeWidth={2.25} />
+                  Ubah Pesanan
                 </Button>
-              )}
-
-              {order.status === "sent" && (
-                <div className="flex items-start gap-3 rounded-2xl bg-sky-50 px-4 py-3 text-base leading-6 text-sky-900">
-                  <Hourglass className="mt-0.5 h-5 w-5 shrink-0" />
-                  <span>
-                    {isRevisi
-                      ? "Perubahan sudah disimpan. Tunggu tukang sayur menghitung ulang harga."
-                      : "Link sudah dibuat. Tunggu tukang sayur mengisi harga."}
-                  </span>
-                </div>
-              )}
-
-              {order.status === "priced" && (
-                <>
-                  <Button onClick={handleApprove} loading={actionLoading}>
-                    <Check className="h-5 w-5" strokeWidth={2.5} />
-                    Setujui Harga
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={mulaiEdit}
-                    disabled={actionLoading}
-                  >
-                    <Pencil className="h-5 w-5" strokeWidth={2.25} />
-                    Ubah Pesanan
-                  </Button>
-                </>
-              )}
-
-              {order.status === "approved" && (
-                <Button onClick={handleTransfer} loading={actionLoading}>
-                  <Wallet className="h-5 w-5" strokeWidth={2.25} />
-                  Saya Sudah Transfer
+                <Button
+                  block={false}
+                  className="flex-1"
+                  onClick={handleApprove}
+                  loading={actionLoading}
+                >
+                  <Check className="h-5 w-5" strokeWidth={2.5} />
+                  Setujui Harga
                 </Button>
-              )}
+              </div>
+            )}
 
-              {order.status === "paid" && (
-                <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 px-4 py-3 text-base leading-6 text-emerald-900">
-                  <PackageCheck className="mt-0.5 h-5 w-5 shrink-0" />
-                  <span>
-                    Transfer dikonfirmasi. Menunggu tukang sayur mengirim
-                    barang.
-                  </span>
-                </div>
-              )}
+            {order.status === "approved" && (
+              <Button onClick={handleTransfer} loading={actionLoading}>
+                <Wallet className="h-5 w-5" strokeWidth={2.25} />
+                Saya Sudah Transfer
+              </Button>
+            )}
 
-              {order.status === "completed" && (
-                <div className="flex items-center justify-center gap-2 rounded-2xl bg-green-700 px-4 py-5 text-center text-lg font-bold text-white">
-                  <PartyPopper className="h-6 w-6" />
-                  Pesanan selesai. Terima kasih!
-                </div>
-              )}
-            </section>
+            {order.status === "paid" && (
+              <div className="flex items-center gap-2 text-base text-zinc-600">
+                <PackageCheck className="h-5 w-5" />
+                Menunggu barang dikirim
+              </div>
+            )}
           </>
         )}
-      </main>
+      </BottomBar>
     </div>
   );
 }

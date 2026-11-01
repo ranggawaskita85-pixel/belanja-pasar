@@ -1,58 +1,37 @@
-import {
-  FileEdit,
-  Send,
-  Tag,
-  ThumbsUp,
-  Wallet,
-  CheckCircle2,
-  type LucideIcon,
-} from "lucide-react";
-
-const statusConfig: Record<
-  string,
-  { label: string; className: string; Icon: LucideIcon }
-> = {
+const statusConfig: Record<string, { label: string; className: string }> = {
   draft: {
     label: "Belum Dikirim",
-    className: "bg-stone-100 text-stone-700 ring-stone-300",
-    Icon: FileEdit,
+    className: "border-zinc-500 bg-zinc-100 text-zinc-800",
   },
   sent: {
     label: "Menunggu Harga",
-    className: "bg-sky-100 text-sky-800 ring-sky-300",
-    Icon: Send,
+    className: "border-sky-600 bg-sky-50 text-sky-900",
   },
   priced: {
     label: "Menunggu Persetujuan",
-    className: "bg-amber-100 text-amber-900 ring-amber-300",
-    Icon: Tag,
+    className: "border-amber-500 bg-amber-50 text-amber-950",
   },
   approved: {
     label: "Disetujui",
-    className: "bg-indigo-100 text-indigo-800 ring-indigo-300",
-    Icon: ThumbsUp,
+    className: "border-indigo-600 bg-indigo-50 text-indigo-900",
   },
   paid: {
     label: "Sudah Transfer",
-    className: "bg-emerald-100 text-emerald-800 ring-emerald-300",
-    Icon: Wallet,
+    className: "border-emerald-600 bg-emerald-50 text-emerald-900",
   },
   completed: {
     label: "Selesai",
-    className: "bg-green-700 text-white ring-green-800",
-    Icon: CheckCircle2,
+    className: "border-emerald-800 bg-emerald-700 text-white",
   },
 };
 
 export default function StatusBadge({ status }: { status: string }) {
   const config = statusConfig[status.toLowerCase()] ?? statusConfig.draft;
-  const { Icon } = config;
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold ring-1 ring-inset ${config.className}`}
+      className={`inline-flex items-center rounded-sm border-l-4 px-2 py-1 text-xs font-bold uppercase tracking-wide ${config.className}`}
     >
-      <Icon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
       {config.label}
     </span>
   );

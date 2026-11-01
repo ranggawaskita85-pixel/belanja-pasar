@@ -3,17 +3,16 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import {
-  ChevronLeft,
-  Plus,
-  Trash2,
-  Tag,
-  Save,
-  ListPlus,
-  ShoppingBasket,
-} from "lucide-react";
+import { Plus, Trash2, Save } from "lucide-react";
 import Button from "@/app/components/Button";
+import {
+  AppBar,
+  Panel,
+  BottomBar,
+  TotalLine,
+  inputCls,
+  labelCls,
+} from "@/app/components/Shell";
 import { useUI } from "@/app/components/UIProvider";
 import {
   SATUAN,
@@ -27,9 +26,6 @@ type DraftItem = {
   unit: string;
   category: string | null;
 };
-
-const inputCls =
-  "h-14 w-full rounded-xl border-2 border-stone-300 bg-white px-4 text-base text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none focus:ring-4 focus:ring-emerald-600/15";
 
 export default function BuatDaftar() {
   const [title, setTitle] = useState(
@@ -120,106 +116,68 @@ export default function BuatDaftar() {
   const hasCategory = groups.some((g) => g.category);
 
   return (
-    <div className="min-h-dvh bg-stone-50">
-      <header className="rounded-b-3xl bg-gradient-to-br from-emerald-600 to-green-800 px-5 pb-7 pt-6 shadow-md">
-        <div className="mx-auto max-w-lg">
-          <Link
-            href="/"
-            className="inline-flex min-h-11 items-center gap-1 text-base font-semibold text-emerald-50 hover:text-white"
-          >
-            <ChevronLeft className="h-5 w-5" strokeWidth={2.25} />
-            Kembali
-          </Link>
-          <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight text-white">
-            Buat Daftar Belanja
-          </h1>
-          <p className="mt-2 text-base leading-7 text-emerald-50">
-            Tulis barang yang mau dibeli, lalu simpan.
-          </p>
-        </div>
-      </header>
+    <div className="min-h-dvh bg-zinc-100 pb-36">
+      <AppBar title="Daftar Baru" backHref="/" />
 
-      <main className="mx-auto max-w-lg space-y-4 px-4 pb-12 pt-5">
-        {/* Nama daftar */}
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <label
-            htmlFor="nama-daftar"
-            className="block text-base font-bold text-stone-900"
-          >
-            Nama Daftar
-          </label>
-          <input
-            id="nama-daftar"
-            type="text"
-            className={`${inputCls} mt-2`}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </section>
-
-        {/* Tambah barang */}
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-stone-900">
-            <ListPlus className="h-5 w-5 text-emerald-700" />
-            Tambah Barang
-          </h2>
-
-          {/* Judul / kategori */}
-          <div className="mt-4">
-            <p className="flex items-center gap-2 text-base font-semibold text-stone-800">
-              <Tag className="h-4 w-4 text-emerald-700" />
-              Judul kelompok (boleh dikosongkan)
-            </p>
-            <p className="mt-1 text-sm leading-6 text-stone-500">
-              Ketuk salah satu, atau ketik sendiri. Barang yang ditambahkan
-              akan masuk ke judul ini.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {KATEGORI_CEPAT.map((k) => {
-                const aktif = category === k;
-                return (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setCategory(aktif ? "" : k)}
-                    aria-pressed={aktif}
-                    className={`min-h-11 rounded-full border-2 px-4 text-base font-semibold transition active:scale-95 ${
-                      aktif
-                        ? "border-emerald-600 bg-emerald-600 text-white"
-                        : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
-                    }`}
-                  >
-                    {k}
-                  </button>
-                );
-              })}
-            </div>
+      <main className="mx-auto max-w-lg space-y-3 pt-3">
+        <Panel title="Nama Daftar">
+          <div className="px-4 py-3">
+            <label htmlFor="nama-daftar" className="sr-only">
+              Nama daftar
+            </label>
             <input
+              id="nama-daftar"
               type="text"
-              aria-label="Judul kelompok sendiri"
-              placeholder="Atau ketik judul sendiri"
-              className={`${inputCls} mt-3`}
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              className={inputCls}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
             />
           </div>
+        </Panel>
 
-          <div className="my-5 border-t border-stone-100" />
-
-          {/* Nama, jumlah, satuan */}
-          <div className="space-y-3">
+        <Panel title="Tambah Barang">
+          <div className="space-y-4 px-4 py-3">
             <div>
-              <label
-                htmlFor="nama-barang"
-                className="block text-base font-semibold text-stone-800"
-              >
+              <span className={labelCls}>Judul kelompok (boleh kosong)</span>
+              <div className="flex flex-wrap gap-2">
+                {KATEGORI_CEPAT.map((k) => {
+                  const aktif = category === k;
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setCategory(aktif ? "" : k)}
+                      aria-pressed={aktif}
+                      className={`h-10 rounded-md border px-3 text-sm font-semibold transition ${
+                        aktif
+                          ? "border-emerald-700 bg-emerald-700 text-white"
+                          : "border-zinc-400 bg-white text-zinc-700 hover:bg-zinc-50"
+                      }`}
+                    >
+                      {k}
+                    </button>
+                  );
+                })}
+              </div>
+              <input
+                type="text"
+                aria-label="Judul kelompok sendiri"
+                placeholder="Atau ketik judul sendiri"
+                className={`${inputCls} mt-2`}
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="nama-barang" className={labelCls}>
                 Nama barang
               </label>
               <input
                 id="nama-barang"
                 type="text"
                 placeholder="Contoh: Wortel"
-                className={`${inputCls} mt-1.5`}
+                className={inputCls}
                 value={itemName}
                 onChange={(e) => setItemName(e.target.value)}
               />
@@ -227,10 +185,7 @@ export default function BuatDaftar() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label
-                  htmlFor="jumlah-barang"
-                  className="block text-base font-semibold text-stone-800"
-                >
+                <label htmlFor="jumlah-barang" className={labelCls}>
                   Jumlah
                 </label>
                 <input
@@ -240,7 +195,7 @@ export default function BuatDaftar() {
                   min="0"
                   step="any"
                   placeholder="0"
-                  className={`${inputCls} mt-1.5`}
+                  className={`${inputCls} tabular-nums`}
                   value={qty}
                   onChange={(e) => setQty(e.target.value)}
                   onKeyDown={(e) => {
@@ -249,15 +204,12 @@ export default function BuatDaftar() {
                 />
               </div>
               <div>
-                <label
-                  htmlFor="satuan-barang"
-                  className="block text-base font-semibold text-stone-800"
-                >
+                <label htmlFor="satuan-barang" className={labelCls}>
                   Satuan
                 </label>
                 <select
                   id="satuan-barang"
-                  className={`${inputCls} mt-1.5`}
+                  className={inputCls}
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
                 >
@@ -270,59 +222,44 @@ export default function BuatDaftar() {
               </div>
             </div>
 
-            <Button onClick={tambahItem}>
+            <Button variant="secondary" onClick={tambahItem}>
               <Plus className="h-5 w-5" strokeWidth={2.5} />
               Tambah ke Daftar
             </Button>
           </div>
-        </section>
+        </Panel>
 
-        {/* Daftar yang sudah ditambahkan */}
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-stone-900">
-              <ShoppingBasket className="h-5 w-5 text-emerald-700" />
-              Isi Daftar
-            </h2>
-            <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-800">
-              {items.length} barang
-            </span>
-          </div>
-
+        <Panel title="Isi Daftar" aside={`${items.length} barang`}>
           {items.length === 0 ? (
-            <p className="mt-4 rounded-xl border-2 border-dashed border-stone-200 px-4 py-6 text-center text-base text-stone-500">
-              Belum ada barang. Isi form di atas lalu ketuk &quot;Tambah ke
-              Daftar&quot;.
+            <p className="px-4 py-6 text-center text-base text-zinc-500">
+              Belum ada barang.
             </p>
           ) : (
-            <div className="mt-2">
+            <div>
               {groups.map((group, gi) => (
-                <div key={`${group.category ?? "_"}-${gi}`} className="mt-3">
+                <div key={`${group.category ?? "_"}-${gi}`}>
                   {hasCategory && (
-                    <h3 className="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-emerald-800">
-                      <Tag className="h-4 w-4" />
+                    <div className="bg-zinc-100 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-700">
                       {group.category ?? "Lainnya"}
-                    </h3>
+                    </div>
                   )}
-                  <ul className="divide-y divide-stone-100">
+                  <ul className="divide-y divide-zinc-200">
                     {group.items.map((item, ii) => (
                       <li
                         key={`${item.name}-${ii}`}
-                        className="flex items-center justify-between gap-3 py-3"
+                        className="flex items-center gap-3 px-4 py-2"
                       >
-                        <div className="min-w-0">
-                          <p className="break-words text-base font-bold text-stone-900">
-                            {item.name}
-                          </p>
-                          <p className="mt-0.5 text-base text-stone-500">
-                            {item.qty} {item.unit}
-                          </p>
-                        </div>
+                        <p className="min-w-0 flex-1 break-words text-base font-semibold text-zinc-900">
+                          {item.name}
+                        </p>
+                        <p className="shrink-0 text-base tabular-nums text-zinc-600">
+                          {item.qty} {item.unit}
+                        </p>
                         <button
                           type="button"
                           onClick={() => hapusItem(item)}
                           aria-label={`Hapus ${item.name}`}
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-red-200 bg-white text-red-600 transition hover:bg-red-50 active:scale-95"
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-red-50 hover:text-red-700 active:bg-red-100"
                         >
                           <Trash2 className="h-5 w-5" />
                         </button>
@@ -333,18 +270,20 @@ export default function BuatDaftar() {
               ))}
             </div>
           )}
-        </section>
+        </Panel>
+      </main>
 
+      <BottomBar>
+        <TotalLine label="Jumlah barang" value={String(items.length)} />
         <Button
           onClick={simpanDaftar}
           loading={loading}
           disabled={items.length === 0}
-          variant="accent"
         >
           <Save className="h-5 w-5" strokeWidth={2.25} />
-          {loading ? "Menyimpan..." : "Simpan Daftar Belanja"}
+          {loading ? "Menyimpan..." : "Simpan Daftar"}
         </Button>
-      </main>
+      </BottomBar>
     </div>
   );
 }
