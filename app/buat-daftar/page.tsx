@@ -20,6 +20,8 @@ import {
   groupByCategory,
 } from "@/app/components/itemUtils";
 import { useBeforeUnload } from "@/app/components/useBeforeUnload";
+import NamaBarangInput from "@/app/components/NamaBarangInput";
+import { useMasterItems } from "@/app/components/useMasterItems";
 
 type DraftItem = {
   name: string;
@@ -43,6 +45,7 @@ export default function BuatDaftar() {
   const supabase = createClient();
   const router = useRouter();
   const { toast, confirm } = useUI();
+  const master = useMasterItems();
 
   // Ada isian yang belum disimpan?
   const dirty = items.length > 0 || itemName.trim() !== "" || title !== judulAwal;
@@ -61,7 +64,7 @@ export default function BuatDaftar() {
     setItems([
       ...items,
       {
-        name: itemName.trim(),
+        name: master.kanonik(itemName),
         qty: Number(qty),
         unit,
         category: category.trim() || null,
@@ -113,6 +116,9 @@ export default function BuatDaftar() {
       setLoading(false);
       return;
     }
+
+    // Nama barang baru ikut masuk ke daftar saran (gagal pun tidak mengganggu)
+    await master.simpanBaru(items.map((i) => ({ name: i.name, unit: i.unit })));
 
     toast("Daftar belanja berhasil disimpan!", "success");
     router.push("/"); // Kembali ke halaman utama
@@ -193,13 +199,18 @@ export default function BuatDaftar() {
               <label htmlFor="nama-barang" className={labelCls}>
                 Nama barang
               </label>
-              <input
+              <NamaBarangInput
                 id="nama-barang"
-                type="text"
                 placeholder="Contoh: Wortel"
-                className={inputCls}
                 value={itemName}
-                onChange={(e) => setItemName(e.target.value)}
+                onChange={setItemName}
+                suggestions={master.items}
+                tersedia={master.tersedia}
+                onPick={(m) => {
+                  if (m.last_unit && SATUAN.includes(m.last_unit)) {
+                    setUnit(m.last_unit);
+                  }
+                }}
               />
             </div>
 

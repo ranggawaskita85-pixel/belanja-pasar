@@ -35,6 +35,8 @@ import { useUI } from "@/app/components/UIProvider";
 import { SATUAN, groupByCategory } from "@/app/components/itemUtils";
 import { hapusOrders } from "@/lib/hapus-order";
 import { useBeforeUnload } from "@/app/components/useBeforeUnload";
+import NamaBarangInput from "@/app/components/NamaBarangInput";
+import { useMasterItems } from "@/app/components/useMasterItems";
 
 type Order = {
   id: string;
@@ -112,6 +114,7 @@ export default function DetailDaftar() {
   const router = useRouter();
   const { confirm, toast } = useUI();
   useBeforeUnload(editing);
+  const master = useMasterItems();
 
   async function getDetail() {
     const { data: orderData } = await supabase
@@ -309,7 +312,7 @@ export default function DetailDaftar() {
       ...prev,
       {
         key: crypto.randomUUID(),
-        name: newName.trim(),
+        name: master.kanonik(newName),
         qty: newQty,
         unit: newUnit,
         category: newCategory.trim() || null,
@@ -408,6 +411,18 @@ export default function DetailDaftar() {
       );
       if (error) return gagal("Gagal menambah barang: " + error.message + ".");
     }
+
+    // Nama barang baru atau yang diganti ikut masuk ke daftar saran
+    // (gagal pun tidak mengganggu)
+    await master.simpanBaru(
+      editItems
+        .filter(
+          (e) =>
+            e.id === undefined ||
+            items.find((a) => a.id === e.id)?.name !== e.name.trim()
+        )
+        .map((e) => ({ name: e.name, unit: e.unit }))
+    );
 
     // 4. Kembalikan status ke 'sent' supaya vendor bisa menghitung ulang
     const { error: errOrder } = await supabase
@@ -613,13 +628,18 @@ export default function DetailDaftar() {
 
             <Panel title="Tambah Barang Baru">
               <div className="space-y-3 px-4 py-3">
-                <input
-                  type="text"
-                  aria-label="Nama barang baru"
+                <NamaBarangInput
+                  ariaLabel="Nama barang baru"
                   placeholder="Nama barang"
                   value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className={inputCls}
+                  onChange={setNewName}
+                  suggestions={master.items}
+                  tersedia={master.tersedia}
+                  onPick={(m) => {
+                    if (m.last_unit && SATUAN.includes(m.last_unit)) {
+                      setNewUnit(m.last_unit);
+                    }
+                  }}
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <input
