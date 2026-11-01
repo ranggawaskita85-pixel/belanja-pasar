@@ -17,6 +17,7 @@ import {
   Trash2,
   Hourglass,
   PackageCheck,
+  RefreshCw,
 } from "lucide-react";
 import StatusBadge from "@/app/components/StatusBadge";
 import StatusTimeline from "@/app/components/StatusTimeline";
@@ -27,6 +28,7 @@ import {
   BottomBar,
   TotalLine,
   Notice,
+  IconButton,
   inputCls,
 } from "@/app/components/Shell";
 import { useUI } from "@/app/components/UIProvider";
@@ -92,6 +94,7 @@ export default function DetailDaftar() {
   const [linkVendor, setLinkVendor] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // State untuk fitur "Ubah Pesanan"
   const [editing, setEditing] = useState(false);
@@ -106,35 +109,41 @@ export default function DetailDaftar() {
   const params = useParams();
   const { confirm, toast } = useUI();
 
-  useEffect(() => {
-    async function getDetail() {
-      const { data: orderData } = await supabase
-        .from("orders")
-        .select()
-        .eq("id", params.id)
-        .single();
+  async function getDetail() {
+    const { data: orderData } = await supabase
+      .from("orders")
+      .select()
+      .eq("id", params.id)
+      .single();
 
-      if (orderData) {
-        setOrder(orderData);
-        if (orderData.public_token) {
-          setLinkVendor(
-            `${window.location.origin}/vendor/${orderData.public_token}`
-          );
-        }
+    if (orderData) {
+      setOrder(orderData);
+      if (orderData.public_token) {
+        setLinkVendor(
+          `${window.location.origin}/vendor/${orderData.public_token}`
+        );
       }
-
-      const { data: itemsData } = await supabase
-        .from("items")
-        .select()
-        .eq("order_id", params.id)
-        .order("id", { ascending: true });
-
-      if (itemsData) setItems(itemsData);
-      setLoading(false);
     }
 
+    const { data: itemsData } = await supabase
+      .from("items")
+      .select()
+      .eq("order_id", params.id)
+      .order("id", { ascending: true });
+
+    if (itemsData) setItems(itemsData);
+    setLoading(false);
+  }
+
+  useEffect(() => {
     getDetail();
   }, [params.id]);
+
+  const handleMuatUlang = async () => {
+    setRefreshing(true);
+    await getDetail();
+    setRefreshing(false);
+  };
 
   const muatUlangItems = async (orderId: string) => {
     const { data } = await supabase
@@ -465,7 +474,22 @@ export default function DetailDaftar() {
 
   return (
     <div className="min-h-dvh bg-zinc-100 pb-44">
-      <AppBar title="Detail Daftar" backHref="/" />
+      <AppBar
+        title="Detail Daftar"
+        backHref="/"
+        right={
+          <IconButton
+            label="Muat ulang"
+            onClick={handleMuatUlang}
+            disabled={refreshing || editing || actionLoading}
+          >
+            <RefreshCw
+              className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`}
+              strokeWidth={2.25}
+            />
+          </IconButton>
+        }
+      />
 
       <main className="mx-auto max-w-lg space-y-3">
         <OrderTitle title={order.title} status={order.status} />

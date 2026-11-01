@@ -14,10 +14,13 @@ export function AppBar({
   title,
   backHref,
   right,
+  meta,
 }: {
   title: string;
   backHref?: string;
   right?: ReactNode;
+  /** Teks kecil di sebelah kanan judul, misalnya hari dan tanggal. */
+  meta?: ReactNode;
 }) {
   return (
     <header className="sticky top-0 z-30 bg-emerald-800 text-white">
@@ -26,19 +29,54 @@ export function AppBar({
           <Link
             href={backHref}
             aria-label="Kembali"
-            className="flex h-11 w-11 items-center justify-center rounded-md hover:bg-emerald-700 active:bg-emerald-900"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md hover:bg-emerald-700 active:bg-emerald-900"
           >
             <ChevronLeft className="h-6 w-6" strokeWidth={2.25} />
           </Link>
         ) : (
-          <div className="w-2" />
+          <div className="w-2 shrink-0" />
         )}
-        <div className="min-w-0 flex-1 truncate text-lg font-semibold">
+        <div
+          className={`min-w-0 truncate text-lg font-semibold ${
+            meta ? "shrink-0" : "flex-1"
+          }`}
+        >
           {title}
         </div>
+        {meta && (
+          <div className="min-w-0 flex-1 truncate pl-2 text-sm tabular-nums text-emerald-100">
+            {meta}
+          </div>
+        )}
         {right}
       </div>
     </header>
+  );
+}
+
+/** Tombol ikon persegi di bilah judul (tanpa tulisan). */
+export function IconButton({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      disabled={disabled}
+      className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-white hover:bg-emerald-700 active:bg-emerald-900 disabled:opacity-60"
+    >
+      {children}
+    </button>
   );
 }
 

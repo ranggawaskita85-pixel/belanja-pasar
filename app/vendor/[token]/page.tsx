@@ -46,6 +46,16 @@ function RowSkeleton() {
   );
 }
 
+/** Minta server mengirim notifikasi ke pembeli. Gagal pun tidak mengganggu vendor. */
+function kabarkanPembeli(token: string, event: "priced" | "completed") {
+  fetch("/api/push/notify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, event }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 const VendorTag = (
   <div className="flex items-center gap-1.5 pr-3 text-xs font-bold uppercase tracking-wide text-emerald-100">
     <Store className="h-4 w-4" strokeWidth={2} />
@@ -143,6 +153,7 @@ export default function HalamanVendor() {
     if (!error && order) {
       setOrder({ ...order, status: "priced" });
       setRevisi(false);
+      kabarkanPembeli(String(params.token), "priced");
       toast("Harga berhasil dikirim ke pembeli.", "success");
     } else {
       toast("Gagal mengirim harga.", "error");
@@ -168,6 +179,7 @@ export default function HalamanVendor() {
 
     if (!error && order) {
       setOrder({ ...order, status: "completed" });
+      kabarkanPembeli(String(params.token), "completed");
       toast("Pesanan ditandai selesai.", "success");
     } else {
       toast("Gagal menandai selesai.", "error");
