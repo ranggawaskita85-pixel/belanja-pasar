@@ -18,6 +18,8 @@ import {
   Hourglass,
   PackageCheck,
   RefreshCw,
+  Save,
+  Scale,
 } from "lucide-react";
 import StatusBadge from "@/app/components/StatusBadge";
 import StatusTimeline from "@/app/components/StatusTimeline";
@@ -38,7 +40,7 @@ import { useBeforeUnload } from "@/app/components/useBeforeUnload";
 import NamaBarangInput from "@/app/components/NamaBarangInput";
 import { useMasterItems } from "@/app/components/useMasterItems";
 import { useRiwayatHarga, useDaftarPenjual } from "@/app/components/useHarga";
-import BarisPembanding from "@/app/components/BarisPembanding";
+import PerbandinganHarga from "@/app/components/PerbandinganHarga";
 
 type Order = {
   id: string;
@@ -46,6 +48,7 @@ type Order = {
   status: string;
   public_token?: string | null;
   seller_name?: string | null;
+  disimpan_at?: string | null;
 };
 
 type Item = {
@@ -126,6 +129,7 @@ export default function DetailDaftar() {
   const [revised, setRevised] = useState(false);
   const [sellerInput, setSellerInput] = useState("");
   const [editSeller, setEditSeller] = useState("");
+  const [bandingOpen, setBandingOpen] = useState(false);
 
   const supabase = createClient();
   const params = useParams();
@@ -139,6 +143,8 @@ export default function DetailDaftar() {
   // Kolom orders.seller_name baru ada setelah SQL Tahap C dijalankan.
   // Selama belum ada, fitur penjual disembunyikan dan alur lama tetap jalan.
   const kolomPenjual = order !== null && "seller_name" in order;
+  // Sama untuk tombol Simpan: butuh kolom orders.disimpan_at (SQL Tahap D).
+  const kolomSimpan = order !== null && "disimpan_at" in order;
 
   // Pembanding harga hanya dibutuhkan saat pembeli memutuskan menyetujui.
   useEffect(() => {
@@ -270,6 +276,43 @@ export default function DetailDaftar() {
     setActionLoading(false);
   };
 
+  // Simpan penawaran: keputusan ditahan, link penjual tetap berlaku, dan
+  // penjual melihat pesan terima kasih saat membuka linknya.
+  const handleSimpanPenawaran = async () => {
+    if (!order) return;
+    setActionLoading(true);
+    const waktu = new Date().toISOString();
+    const { error } = await supabase
+      .from("orders")
+      .update({ disimpan_at: waktu })
+      .eq("id", order.id);
+
+    if (error) {
+      toast("Gagal menyimpan penawaran: " + error.message, "error");
+      setActionLoading(false);
+      return;
+    }
+    setOrder({ ...order, disimpan_at: waktu });
+
+    // Harga yang disimpan ikut jadi bahan perbandingan dengan penjual lain
+    if (order.seller_name) {
+      const tersimpan = await catatHarga(order.id, order.seller_name, items);
+      if (!tersimpan) {
+        toast(
+          "Penawaran disimpan, tetapi belum tersimpan sebagai pembanding.",
+          "info"
+        );
+      }
+    } else if (kolomPenjual) {
+      toast(
+        "Isi nama penjual agar penawaran ini tersimpan sebagai pembanding.",
+        "info"
+      );
+    }
+    toast("Penawaran disimpan. Penjual akan melihat pesan terima kasih.", "success");
+    setActionLoading(false);
+  };
+
   // Untuk pesanan yang dibuat sebelum ada kolom penjual
   const handleSimpanNamaPenjual = async () => {
     if (!order) return;
@@ -293,7 +336,7 @@ export default function DetailDaftar() {
 
     setOrder({ ...order, seller_name: nama });
     // Jika harga sudah telanjur disetujui, simpan sekarang sebagai pembanding
-    if (["approved", "paid", "completed"].includes(order.status)) {
+    if (["approved", "paid", "completed"].includes(order.status) || order.disimpan_at) {
       await catatHarga(order.id, nama, items);
     }
     penjual.muat();
@@ -530,6 +573,7 @@ export default function DetailDaftar() {
       .update({
         status: "sent",
         ...(kolomPenjual ? { seller_name: penjualBaru } : {}),
+        ...(kolomSimpan ? { disimpan_at: null } : {}),
       })
       .eq("id", orderId);
     if (errOrder)
@@ -540,6 +584,7 @@ export default function DetailDaftar() {
       ...order,
       status: "sent",
       ...(kolomPenjual ? { seller_name: penjualBaru } : {}),
+      ...(kolomSimpan ? { disimpan_at: null } : {}),
     });
     if (kolomPenjual) penjual.muat();
     setRevised(true);
@@ -622,7 +667,7 @@ export default function DetailDaftar() {
   );
 
   return (
-    <div className="min-h-dvh bg-zinc-100 pb-44">
+    <div className="min-h-dvh bg-zinc-100 pb-48">
       <AppBar
         title="Detail Daftar"
         backHref="/"
@@ -885,6 +930,18 @@ export default function DetailDaftar() {
               </Panel>
             )}
 
+            {order.status === "priced" && (
+              <div className="px-4">
+                <Button
+                  variant="secondary"
+                  onClick={() => setBandingOpen(true)}
+                >
+                  <Scale className="h-5 w-5" strokeWidth={2.25} />
+                  Bandingkan Harga
+                </Button>
+              </div>
+            )}
+
             <Panel title="Daftar Barang" aside={`${items.length} barang`}>
               {groups.map((group, gi) => {
                 const subtotal = group.items.reduce(
@@ -916,13 +973,6 @@ export default function DetailDaftar() {
                             <p className="mt-0.5 text-sm tabular-nums text-zinc-500">
                               {item.qty} {item.unit}
                             </p>
-                            {order.status === "priced" && (
-                              <BarisPembanding
-                                item={item}
-                                riwayat={riwayat}
-                                orderId={order.id}
-                              />
-                            )}
                           </div>
                           <p className="shrink-0 text-right text-base font-semibold tabular-nums text-zinc-900">
                             {item.price ? (
@@ -1071,26 +1121,47 @@ export default function DetailDaftar() {
             )}
 
             {order.status === "priced" && (
-              <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  block={false}
-                  className="px-4"
-                  onClick={mulaiEdit}
-                  disabled={actionLoading}
-                >
-                  <Pencil className="h-5 w-5" strokeWidth={2.25} />
-                  Ubah Pesanan
-                </Button>
-                <Button
-                  block={false}
-                  className="flex-1"
-                  onClick={handleApprove}
-                  loading={actionLoading}
-                >
+              <div className="space-y-2">
+                <Button onClick={handleApprove} loading={actionLoading}>
                   <Check className="h-5 w-5" strokeWidth={2.5} />
                   Setujui Harga
                 </Button>
+                <div
+                  className={`grid gap-2 ${
+                    kolomSimpan ? "grid-cols-3" : "grid-cols-2"
+                  }`}
+                >
+                  {kolomSimpan && (
+                    <Button
+                      variant="secondary"
+                      className="px-2"
+                      onClick={handleSimpanPenawaran}
+                      disabled={actionLoading || Boolean(order.disimpan_at)}
+                    >
+                      <Save className="h-5 w-5" strokeWidth={2.25} />
+                      {order.disimpan_at ? "Tersimpan" : "Simpan"}
+                    </Button>
+                  )}
+                  <Button
+                    variant="secondary"
+                    className="px-2"
+                    aria-label="Ubah Pesanan"
+                    onClick={mulaiEdit}
+                    disabled={actionLoading}
+                  >
+                    <Pencil className="h-5 w-5" strokeWidth={2.25} />
+                    Ubah
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={handleBatalkanPesanan}
+                    disabled={actionLoading}
+                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-md border border-red-300 bg-white px-2 text-base font-semibold text-red-700 transition hover:bg-red-50 active:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 className="h-5 w-5" strokeWidth={2.25} />
+                    Batal
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1110,6 +1181,16 @@ export default function DetailDaftar() {
           </>
         )}
       </BottomBar>
+
+      {bandingOpen && order && (
+        <PerbandinganHarga
+          items={items}
+          riwayat={riwayat}
+          orderId={order.id}
+          penjualSendiri={order.seller_name ?? ""}
+          onClose={() => setBandingOpen(false)}
+        />
+      )}
     </div>
   );
 }

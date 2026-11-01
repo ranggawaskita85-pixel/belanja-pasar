@@ -16,11 +16,16 @@ import {
 } from "@/app/components/Shell";
 import { useUI } from "@/app/components/UIProvider";
 import { groupByCategory } from "@/app/components/itemUtils";
+import PopupInfo from "@/app/components/PopupInfo";
+
+/** Selisih waktu cek berkala saat menunggu keputusan pembeli. */
+const JEDA_CEK_MS = 10_000;
 
 type Order = {
   id: string;
   title: string;
   status: string;
+  disimpan_at?: string | null;
 };
 
 type Item = {
@@ -70,6 +75,7 @@ export default function HalamanVendor() {
   const [simpanLoading, setSimpanLoading] = useState(false);
   // true jika saat halaman dibuka, sudah ada harga lama (pembeli mengubah pesanan)
   const [revisi, setRevisi] = useState(false);
+  const [terimaKasih, setTerimaKasih] = useState(false);
   const supabase = createClient();
   const params = useParams();
   const { confirm, toast } = useUI();
@@ -84,6 +90,9 @@ export default function HalamanVendor() {
 
       if (orderData) {
         setOrder(orderData);
+        if (orderData.status === "priced" && orderData.disimpan_at) {
+          setTerimaKasih(true);
+        }
         const { data: itemsData } = await supabase
           .from("items")
           .select()
@@ -104,6 +113,53 @@ export default function HalamanVendor() {
 
     getData();
   }, [params.token]);
+
+  // Selagi menunggu keputusan pembeli, cek berkala. Pembeli bisa menekan
+  // Simpan (muncul pesan terima kasih) atau Batal (link tidak berlaku lagi).
+  const statusSekarang = order?.status;
+  const disimpanSekarang = order?.disimpan_at;
+  useEffect(() => {
+    if (statusSekarang !== "priced") return;
+
+    const cek = async () => {
+      if (document.visibilityState === "hidden") return;
+
+      const { data, error } = await supabase
+        .from("orders")
+        .select()
+        .eq("public_token", params.token)
+        .maybeSingle();
+
+      if (error) return; // gangguan jaringan: jangan anggap link tidak valid
+      if (!data) {
+        setOrder(null); // pesanan dibatalkan pembeli
+        return;
+      }
+
+      if (data.status !== statusSekarang) {
+        // Pembeli mengubah pesanan (atau menyetujui): muat ulang isinya.
+        const { data: itemsBaru } = await supabase
+          .from("items")
+          .select()
+          .eq("order_id", data.id)
+          .order("id", { ascending: true });
+        if (itemsBaru) {
+          setItems(itemsBaru);
+          setRevisi(
+            data.status === "sent" &&
+              itemsBaru.some((i: Item) => Number(i.price) > 0)
+          );
+        }
+        setOrder(data);
+      } else if ((data.disimpan_at ?? null) !== (disimpanSekarang ?? null)) {
+        setOrder(data);
+        if (data.disimpan_at) setTerimaKasih(true);
+      }
+    };
+
+    const timer = setInterval(cek, JEDA_CEK_MS);
+    return () => clearInterval(timer);
+  }, [statusSekarang, disimpanSekarang, params.token, supabase]);
 
   const handlePriceChange = (id: number, price: string) => {
     setItems((prev) =>
@@ -126,6 +182,18 @@ export default function HalamanVendor() {
       confirmLabel: "Ya, kirim",
     });
     if (!ok) return;
+
+    // Pembeli mungkin sudah membatalkan pesanan setelah halaman ini dibuka.
+    const { data: masihAda, error: errCek } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("public_token", params.token)
+      .maybeSingle();
+    if (!errCek && !masihAda) {
+      toast("Link ini sudah tidak berlaku.", "error");
+      setOrder(null);
+      return;
+    }
 
     setSimpanLoading(true);
 
@@ -351,6 +419,13 @@ export default function HalamanVendor() {
           <Notice tone="ok">Pesanan selesai. Terima kasih!</Notice>
         )}
       </main>
+
+      {terimaKasih && order.status === "priced" && (
+        <PopupInfo
+          pesan="Terima kasih, nanti akan diinformasikan kembali."
+          onTutup={() => setTerimaKasih(false)}
+        />
+      )}
 
       <BottomBar>
         <TotalLine label="Total" value={formatRupiah(total)} />

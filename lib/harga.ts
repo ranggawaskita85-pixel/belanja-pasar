@@ -147,3 +147,210 @@ export function bandingkan(hargaSatuan: number, pembanding: number): Selisih {
     selisih: Math.abs(selisih),
   };
 }
+
+/* =====================================================================
+ * Tahap E: perbandingan dua kolom antar penjual
+ * ===================================================================== */
+
+/**
+ * Satuan yang punya rasio pasti. Selain ini, satuan hanya sama dengan
+ * dirinya sendiri (satu ikat bayam tidak bisa diubah ke kg).
+ * pcs dan buah dianggap sama.
+ */
+const FAMILI_SATUAN: Record<string, { famili: string; faktor: number }> = {
+  kg: { famili: "massa", faktor: 1000 },
+  gram: { famili: "massa", faktor: 1 },
+  pcs: { famili: "hitung", faktor: 1 },
+  buah: { famili: "hitung", faktor: 1 },
+};
+
+export function infoSatuan(unit: string) {
+  const u = unit.trim().toLowerCase();
+  return FAMILI_SATUAN[u] ?? { famili: u, faktor: 1 };
+}
+
+export function bisaDikonversi(dari: string, ke: string) {
+  return infoSatuan(dari).famili === infoSatuan(ke).famili;
+}
+
+/** Mengubah harga per satuan asal menjadi harga per satuan tujuan; null jika tidak bisa. */
+export function konversiHargaSatuan(
+  hargaPerSatuanAsal: number,
+  dari: string,
+  ke: string
+): number | null {
+  if (!bisaDikonversi(dari, ke)) return null;
+  return hargaPerSatuanAsal * (infoSatuan(ke).faktor / infoSatuan(dari).faktor);
+}
+
+export type SelKanan =
+  | {
+      status: "ada";
+      /** harga untuk jumlah yang sama dengan kolom kiri, dibulatkan */
+      harga: number;
+      /** harga per satuan kolom kiri setelah dikonversi */
+      hargaSatuan: number;
+      unit: string;
+      unitAsal: string;
+      dikonversi: boolean;
+      tanggal: string;
+    }
+  | { status: "kosong" }
+  | { status: "satuan_beda"; unitAsal: string };
+
+export type OpsiPenjual = {
+  seller_name: string;
+  seller_key: string;
+  /** sejajar dengan daftar barang di kolom kiri */
+  sel: SelKanan[];
+  jumlahAda: number;
+  total: number;
+  tanggalTerbaru: string;
+};
+
+export type HasilBanding = {
+  /** Urutan bawaan: barang paling lengkap, lalu total terendah. */
+  opsi: OpsiPenjual[];
+};
+
+type BarisKiri = {
+  name: string;
+  qty: number | string;
+  unit: string;
+  price: number | string | null;
+};
+
+/**
+ * Menyusun kolom kanan untuk setiap penjual LAIN yang punya riwayat harga.
+ * Setiap sel memakai harga terbaru penjual itu untuk barang yang sama,
+ * dikonversi ke satuan dan jumlah kolom kiri.
+ * Baris dari pesanan ini dan dari penjual yang sama diabaikan.
+ */
+export function susunPerbandingan(
+  items: BarisKiri[],
+  riwayat: BarisRiwayat[],
+  opsi: { orderId?: string; penjualSendiri?: string } = {}
+): HasilBanding {
+  const kunciSendiri = opsi.penjualSendiri ? kunciNama(opsi.penjualSendiri) : "";
+  const kunciBarang = items.map((i) => kunciNama(i.name));
+
+  const perPenjual = new Map<string, BarisRiwayat[]>();
+  for (const r of riwayat) {
+    if (opsi.orderId !== undefined && String(r.order_id) === String(opsi.orderId)) continue;
+    if (kunciSendiri && r.seller_key === kunciSendiri) continue;
+    if (!kunciBarang.includes(r.item_key)) continue;
+    const daftar = perPenjual.get(r.seller_key);
+    if (daftar) daftar.push(r);
+    else perPenjual.set(r.seller_key, [r]);
+  }
+
+  const hasil: OpsiPenjual[] = [];
+
+  for (const [sellerKey, baris] of perPenjual) {
+    const sel: SelKanan[] = items.map((item, idx) => {
+      const untukBarang = baris.filter((r) => r.item_key === kunciBarang[idx]);
+      if (untukBarang.length === 0) return { status: "kosong" };
+
+      const terbaru = (a: BarisRiwayat, b: BarisRiwayat) =>
+        a.approved_at < b.approved_at ? 1 : -1;
+
+      const cocok = untukBarang
+        .filter((r) => bisaDikonversi(r.unit, item.unit))
+        .sort(terbaru)[0];
+
+      if (!cocok) {
+        return { status: "satuan_beda", unitAsal: untukBarang.sort(terbaru)[0].unit };
+      }
+
+      const hargaSatuan = konversiHargaSatuan(
+        Number(cocok.unit_price),
+        cocok.unit,
+        item.unit
+      ) as number;
+      const qty = Number(item.qty);
+
+      return {
+        status: "ada",
+        harga: Math.round(hargaSatuan * (qty > 0 ? qty : 0)),
+        hargaSatuan,
+        unit: item.unit,
+        unitAsal: cocok.unit,
+        dikonversi: infoSatuan(cocok.unit).faktor !== infoSatuan(item.unit).faktor,
+        tanggal: cocok.approved_at,
+      };
+    });
+
+    const ada = sel.filter((s): s is Extract<SelKanan, { status: "ada" }> => s.status === "ada");
+    if (ada.length === 0) continue;
+
+    hasil.push({
+      seller_name: baris[0].seller_name,
+      seller_key: sellerKey,
+      sel,
+      jumlahAda: ada.length,
+      total: ada.reduce((n, s) => n + s.harga, 0),
+      tanggalTerbaru: ada.map((s) => s.tanggal).sort().slice(-1)[0],
+    });
+  }
+
+  hasil.sort(
+    (a, b) =>
+      b.jumlahAda - a.jumlahAda ||
+      a.total - b.total ||
+      a.seller_name.localeCompare(b.seller_name, "id")
+  );
+
+  return { opsi: hasil };
+}
+
+export type RingkasanBanding = {
+  totalKiri: number;
+  totalKanan: number;
+  /** barang yang belum diberi harga oleh penjual di kolom kiri */
+  kiriKosong: string[];
+  /** barang yang tidak ada / satuannya tak bisa dikonversi di kolom kanan */
+  kananKosong: string[];
+  /** hanya barang yang sama-sama punya harga di kedua sisi */
+  sebanding: { jumlah: number; totalKiri: number; totalKanan: number };
+};
+
+export function hitungRingkasan(items: BarisKiri[], sel: SelKanan[]): RingkasanBanding {
+  let totalKiri = 0;
+  let totalKanan = 0;
+  const kiriKosong: string[] = [];
+  const kananKosong: string[] = [];
+  const sebanding = { jumlah: 0, totalKiri: 0, totalKanan: 0 };
+
+  items.forEach((item, i) => {
+    const kiri = Number(item.price);
+    const adaKiri = kiri > 0;
+    const s = sel[i];
+    const adaKanan = s?.status === "ada";
+
+    if (adaKiri) totalKiri += kiri;
+    else kiriKosong.push(item.name);
+
+    if (adaKanan) totalKanan += (s as Extract<SelKanan, { status: "ada" }>).harga;
+    else kananKosong.push(item.name);
+
+    if (adaKiri && adaKanan) {
+      sebanding.jumlah += 1;
+      sebanding.totalKiri += kiri;
+      sebanding.totalKanan += (s as Extract<SelKanan, { status: "ada" }>).harga;
+    }
+  });
+
+  return { totalKiri, totalKanan, kiriKosong, kananKosong, sebanding };
+}
+
+export type ArahSelisih = {
+  /** kananMurah = penjual lain lebih murah (merah); kananMahal = lebih mahal (hijau) */
+  tipe: "kananMurah" | "kananMahal" | "sama";
+  selisih: number;
+};
+
+export function arahSelisih(totalKiri: number, totalKanan: number): ArahSelisih {
+  const d = Math.round(totalKiri) - Math.round(totalKanan);
+  if (d === 0) return { tipe: "sama", selisih: 0 };
+  return { tipe: d > 0 ? "kananMurah" : "kananMahal", selisih: Math.abs(d) };
+}

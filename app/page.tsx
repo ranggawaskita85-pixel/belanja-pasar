@@ -16,6 +16,7 @@ type Order = {
   status: string;
   created_at: string;
   seller_name?: string | null;
+  diarsipkan_at?: string | null;
 };
 
 type Filter = "semua" | "berjalan" | "selesai";
@@ -57,14 +58,29 @@ export default function Home() {
   const [hariIni, setHariIni] = useState("");
   const [hapusId, setHapusId] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+  // true jika kolom orders.diarsipkan_at ada (SQL Tahap D sudah dijalankan)
+  const [kolomArsip, setKolomArsip] = useState(false);
   const supabase = createClient();
   const { confirm, toast } = useUI();
 
   async function getOrders() {
-    const { data, error } = await supabase
+    // Pesanan yang sudah diarsipkan (Reset Riwayat) tidak ditampilkan.
+    let { data, error } = await supabase
       .from("orders")
       .select()
+      .is("diarsipkan_at", null)
       .order("created_at", { ascending: false });
+
+    if (error) {
+      // Kolom diarsipkan_at belum ada: muat seperti semula.
+      setKolomArsip(false);
+      ({ data, error } = await supabase
+        .from("orders")
+        .select()
+        .order("created_at", { ascending: false }));
+    } else {
+      setKolomArsip(true);
+    }
 
     if (data) setOrders(data);
     if (error) console.log(error);
@@ -106,6 +122,54 @@ export default function Home() {
 
   const resetRiwayat = async () => {
     if (orders.length === 0) return;
+
+    // Dengan kolom arsip: pesanan hanya disembunyikan, isi barang dan harga
+    // tetap ada di database (autofill dan harga pembanding tidak terpengaruh).
+    if (kolomArsip) {
+      const okArsip = await confirm({
+        title: "Reset semua riwayat?",
+        description: `${orders.length} daftar belanja akan disembunyikan dari beranda, termasuk yang masih berjalan. Isi barang dan harganya tetap tersimpan di database, tetapi link penjual tidak berlaku lagi.`,
+        confirmLabel: "Ya, reset",
+        destructive: true,
+      });
+      if (!okArsip) return;
+
+      setResetting(true);
+      const ids = orders.map((o) => o.id);
+      const waktu = new Date().toISOString();
+      const diarsipkan: string[] = [];
+      let pesanGagal = "";
+
+      for (let i = 0; i < ids.length; i += 50) {
+        const batch = ids.slice(i, i + 50);
+        const { data, error } = await supabase
+          .from("orders")
+          .update({ diarsipkan_at: waktu, public_token: null })
+          .in("id", batch)
+          .select("id");
+
+        if (error || !data || data.length === 0) {
+          pesanGagal = error?.message ?? "Database menolak perubahan.";
+          break;
+        }
+        for (const row of data as { id: string }[]) diarsipkan.push(row.id);
+      }
+
+      if (diarsipkan.length > 0) {
+        setOrders((prev) => prev.filter((o) => !diarsipkan.includes(o.id)));
+      }
+      if (!pesanGagal) {
+        toast("Riwayat direset. Data barang tetap tersimpan.", "success");
+      } else {
+        toast(
+          `Tidak semua direset (${diarsipkan.length} dari ${ids.length}): ${pesanGagal}`,
+          "error"
+        );
+      }
+      setResetting(false);
+      return;
+    }
+
     const ok = await confirm({
       title: "Reset semua riwayat?",
       description: `${orders.length} daftar belanja beserta isinya akan dihapus permanen, termasuk yang masih berjalan. Tindakan ini tidak bisa dibatalkan.`,
@@ -216,7 +280,7 @@ export default function Home() {
             className="inline-flex h-10 items-center gap-1.5 rounded-md px-2 text-xs font-bold uppercase tracking-wide text-red-700 hover:bg-red-50 active:bg-red-100 disabled:opacity-40"
           >
             <Trash2 className="h-4 w-4" strokeWidth={2.25} />
-            {resetting ? "Menghapus..." : "Reset Riwayat"}
+            {resetting ? "Memproses..." : "Reset Riwayat"}
           </button>
         </div>
 
