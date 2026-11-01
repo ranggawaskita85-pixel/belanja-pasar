@@ -19,6 +19,7 @@ import {
   KATEGORI_CEPAT,
   groupByCategory,
 } from "@/app/components/itemUtils";
+import { useBeforeUnload } from "@/app/components/useBeforeUnload";
 
 type DraftItem = {
   name: string;
@@ -37,10 +38,15 @@ export default function BuatDaftar() {
   const [unit, setUnit] = useState("kg");
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(false);
+  const [judulAwal] = useState(title);
 
   const supabase = createClient();
   const router = useRouter();
-  const { toast } = useUI();
+  const { toast, confirm } = useUI();
+
+  // Ada isian yang belum disimpan?
+  const dirty = items.length > 0 || itemName.trim() !== "" || title !== judulAwal;
+  useBeforeUnload(dirty && !loading);
 
   // Fungsi untuk menambah item ke daftar sementara (di layar)
   const tambahItem = () => {
@@ -112,12 +118,26 @@ export default function BuatDaftar() {
     router.push("/"); // Kembali ke halaman utama
   };
 
+  const handleBatal = async () => {
+    if (dirty) {
+      const ok = await confirm({
+        title: "Batalkan daftar ini?",
+        description: "Semua isian yang belum disimpan akan dibuang.",
+        confirmLabel: "Ya, batalkan",
+        cancelLabel: "Lanjut mengisi",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    router.push("/");
+  };
+
   const groups = groupByCategory(items);
   const hasCategory = groups.some((g) => g.category);
 
   return (
     <div className="min-h-dvh bg-zinc-100 pb-36">
-      <AppBar title="Daftar Baru" backHref="/" />
+      <AppBar title="Daftar Baru" backHref="/" homeDirty={dirty} />
 
       <main className="mx-auto max-w-lg space-y-3 pt-3">
         <Panel title="Nama Daftar">
@@ -275,14 +295,27 @@ export default function BuatDaftar() {
 
       <BottomBar>
         <TotalLine label="Jumlah barang" value={String(items.length)} />
-        <Button
-          onClick={simpanDaftar}
-          loading={loading}
-          disabled={items.length === 0}
-        >
-          <Save className="h-5 w-5" strokeWidth={2.25} />
-          {loading ? "Menyimpan..." : "Simpan Daftar"}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            block={false}
+            className="px-6"
+            onClick={handleBatal}
+            disabled={loading}
+          >
+            Batal
+          </Button>
+          <Button
+            block={false}
+            className="flex-1"
+            onClick={simpanDaftar}
+            loading={loading}
+            disabled={items.length === 0}
+          >
+            <Save className="h-5 w-5" strokeWidth={2.25} />
+            {loading ? "Menyimpan..." : "Simpan Daftar"}
+          </Button>
+        </div>
       </BottomBar>
     </div>
   );

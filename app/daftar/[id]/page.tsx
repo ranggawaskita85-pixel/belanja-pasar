@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { createClient } from "@/lib/supabase";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Copy,
@@ -33,6 +33,8 @@ import {
 } from "@/app/components/Shell";
 import { useUI } from "@/app/components/UIProvider";
 import { SATUAN, groupByCategory } from "@/app/components/itemUtils";
+import { hapusOrders } from "@/lib/hapus-order";
+import { useBeforeUnload } from "@/app/components/useBeforeUnload";
 
 type Order = {
   id: string;
@@ -107,7 +109,9 @@ export default function DetailDaftar() {
 
   const supabase = createClient();
   const params = useParams();
+  const router = useRouter();
   const { confirm, toast } = useUI();
+  useBeforeUnload(editing);
 
   async function getDetail() {
     const { data: orderData } = await supabase
@@ -232,6 +236,28 @@ export default function DetailDaftar() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast("Gagal menyalin. Salin manual dari kotak link.", "error");
+    }
+  };
+
+  const handleBatalkanPesanan = async () => {
+    const ok = await confirm({
+      title: "Batalkan pesanan ini?",
+      description:
+        "Daftar beserta isinya akan dihapus permanen. Link yang sudah dikirim ke tukang sayur tidak berlaku lagi.",
+      confirmLabel: "Ya, batalkan",
+      cancelLabel: "Tidak",
+      destructive: true,
+    });
+    if (!ok || !order) return;
+
+    setActionLoading(true);
+    const hasil = await hapusOrders(supabase, [order.id]);
+    if (hasil.terhapus.length > 0) {
+      toast("Pesanan dibatalkan.", "success");
+      router.push("/");
+    } else {
+      toast("Gagal membatalkan: " + (hasil.pesan ?? "tidak diketahui"), "error");
+      setActionLoading(false);
     }
   };
 
@@ -477,6 +503,7 @@ export default function DetailDaftar() {
       <AppBar
         title="Detail Daftar"
         backHref="/"
+        homeDirty={editing}
         right={
           <IconButton
             label="Muat ulang"
@@ -828,6 +855,17 @@ export default function DetailDaftar() {
                 <Hourglass className="h-5 w-5" />
                 Menunggu tukang sayur
               </div>
+            )}
+
+            {(order.status === "draft" || order.status === "sent") && (
+              <button
+                type="button"
+                onClick={handleBatalkanPesanan}
+                disabled={actionLoading}
+                className="flex h-10 w-full items-center justify-center rounded-md text-sm font-bold uppercase tracking-wide text-red-700 hover:bg-red-50 active:bg-red-100 disabled:opacity-40"
+              >
+                Batalkan Pesanan
+              </button>
             )}
 
             {order.status === "priced" && (

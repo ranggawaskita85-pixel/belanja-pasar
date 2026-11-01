@@ -1,6 +1,6 @@
-import Link from "next/link";
-import { ChevronLeft, Info, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Info, AlertTriangle, CheckCircle2 } from "lucide-react";
 import type { ReactNode } from "react";
+import HomeButton from "@/app/components/HomeButton";
 
 /** Gaya input dan label yang dipakai di semua form. */
 export const inputCls =
@@ -15,10 +15,13 @@ export function AppBar({
   backHref,
   right,
   meta,
+  homeDirty = false,
 }: {
   title: string;
   backHref?: string;
   right?: ReactNode;
+  /** true = ada proses belum selesai, tampilkan peringatan sebelum ke beranda. */
+  homeDirty?: boolean;
   /** Teks kecil di sebelah kanan judul, misalnya hari dan tanggal. */
   meta?: ReactNode;
 }) {
@@ -26,13 +29,7 @@ export function AppBar({
     <header className="sticky top-0 z-30 bg-emerald-800 text-white">
       <div className="mx-auto flex h-14 max-w-lg items-center gap-1 px-2">
         {backHref ? (
-          <Link
-            href={backHref}
-            aria-label="Kembali"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md hover:bg-emerald-700 active:bg-emerald-900"
-          >
-            <ChevronLeft className="h-6 w-6" strokeWidth={2.25} />
-          </Link>
+          <HomeButton href={backHref} dirty={homeDirty} />
         ) : (
           <div className="w-2 shrink-0" />
         )}
