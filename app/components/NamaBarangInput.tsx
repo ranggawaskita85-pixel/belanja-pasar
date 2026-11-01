@@ -15,6 +15,8 @@ type Props = {
   suggestions: MasterItem[];
   /** true jika daftar saran berhasil dimuat (untuk petunjuk "barang baru"). */
   tersedia?: boolean;
+  /** Teks petunjuk saat ketikan belum ada di daftar saran. */
+  petunjukBaru?: string;
   placeholder?: string;
   ariaLabel?: string;
 };
@@ -27,6 +29,7 @@ export default function NamaBarangInput({
   onPick,
   suggestions,
   tersedia = false,
+  petunjukBaru = "Barang baru, akan disimpan ke daftar saran.",
   placeholder,
   ariaLabel,
 }: Props) {
@@ -131,9 +134,7 @@ export default function NamaBarangInput({
       )}
 
       {tersedia && q && !persis && hasil.length === 0 && (
-        <p className="mt-1 text-xs text-zinc-500">
-          Barang baru, akan disimpan ke daftar saran.
-        </p>
+        <p className="mt-1 text-xs text-zinc-500">{petunjukBaru}</p>
       )}
     </div>
   );

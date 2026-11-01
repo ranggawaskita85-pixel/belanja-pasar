@@ -15,6 +15,7 @@ type Order = {
   title: string;
   status: string;
   created_at: string;
+  seller_name?: string | null;
 };
 
 type Filter = "semua" | "berjalan" | "selesai";
@@ -261,6 +262,11 @@ export default function Home() {
                     <div className="mt-1.5">
                       <StatusBadge status={order.status} />
                     </div>
+                    {order.seller_name && (
+                      <p className="mt-1 truncate text-sm text-zinc-500">
+                        Penjual: {order.seller_name}
+                      </p>
+                    )}
                   </div>
                   <ChevronRight
                     className="h-5 w-5 shrink-0 text-zinc-400"

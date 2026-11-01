@@ -37,12 +37,15 @@ import { hapusOrders } from "@/lib/hapus-order";
 import { useBeforeUnload } from "@/app/components/useBeforeUnload";
 import NamaBarangInput from "@/app/components/NamaBarangInput";
 import { useMasterItems } from "@/app/components/useMasterItems";
+import { useRiwayatHarga, useDaftarPenjual } from "@/app/components/useHarga";
+import BarisPembanding from "@/app/components/BarisPembanding";
 
 type Order = {
   id: string;
   title: string;
   status: string;
   public_token?: string | null;
+  seller_name?: string | null;
 };
 
 type Item = {
@@ -78,7 +81,15 @@ function RowSkeleton() {
   );
 }
 
-function OrderTitle({ title, status }: { title: string; status?: string }) {
+function OrderTitle({
+  title,
+  status,
+  seller,
+}: {
+  title: string;
+  status?: string;
+  seller?: string | null;
+}) {
   return (
     <div className="border-b border-zinc-300 bg-white px-4 py-4">
       <h1 className="break-words text-xl font-bold text-zinc-900">{title}</h1>
@@ -86,6 +97,11 @@ function OrderTitle({ title, status }: { title: string; status?: string }) {
         <div className="mt-2">
           <StatusBadge status={status} />
         </div>
+      )}
+      {seller && (
+        <p className="mt-2 text-sm text-zinc-600">
+          Penjual: <span className="font-semibold text-zinc-900">{seller}</span>
+        </p>
       )}
     </div>
   );
@@ -108,6 +124,8 @@ export default function DetailDaftar() {
   const [newUnit, setNewUnit] = useState("kg");
   const [newCategory, setNewCategory] = useState("");
   const [revised, setRevised] = useState(false);
+  const [sellerInput, setSellerInput] = useState("");
+  const [editSeller, setEditSeller] = useState("");
 
   const supabase = createClient();
   const params = useParams();
@@ -115,6 +133,17 @@ export default function DetailDaftar() {
   const { confirm, toast } = useUI();
   useBeforeUnload(editing);
   const master = useMasterItems();
+  const penjual = useDaftarPenjual();
+  const { riwayat, muat: muatRiwayat, catat: catatHarga } = useRiwayatHarga();
+
+  // Kolom orders.seller_name baru ada setelah SQL Tahap C dijalankan.
+  // Selama belum ada, fitur penjual disembunyikan dan alur lama tetap jalan.
+  const kolomPenjual = order !== null && "seller_name" in order;
+
+  // Pembanding harga hanya dibutuhkan saat pembeli memutuskan menyetujui.
+  useEffect(() => {
+    if (order?.status === "priced") muatRiwayat(items.map((i) => i.name));
+  }, [order?.status, items, muatRiwayat]);
 
   async function getDetail() {
     const { data: orderData } = await supabase
@@ -162,19 +191,37 @@ export default function DetailDaftar() {
   };
 
   const handleKirim = async () => {
+    const namaPenjual = penjual.kanonik(sellerInput);
+    if (kolomPenjual && !namaPenjual) {
+      toast("Isi nama penjual dulu ya.", "error");
+      return;
+    }
+
     setActionLoading(true);
     const token = crypto.randomUUID();
 
     const { error } = await supabase
       .from("orders")
-      .update({ public_token: token, status: "sent" })
+      .update({
+        public_token: token,
+        status: "sent",
+        ...(kolomPenjual ? { seller_name: namaPenjual } : {}),
+      })
       .eq("id", params.id);
 
     if (!error) {
       setLinkVendor(`${window.location.origin}/vendor/${token}`);
       setOrder((prev) =>
-        prev ? { ...prev, status: "sent", public_token: token } : prev
+        prev
+          ? {
+              ...prev,
+              status: "sent",
+              public_token: token,
+              ...(kolomPenjual ? { seller_name: namaPenjual } : {}),
+            }
+          : prev
       );
+      if (kolomPenjual) penjual.muat();
       toast("Link untuk tukang sayur berhasil dibuat.", "success");
     } else {
       toast("Gagal membuat link: " + error.message, "error");
@@ -200,10 +247,57 @@ export default function DetailDaftar() {
 
     if (!error && order) {
       setOrder({ ...order, status: "approved" });
+
+      // Simpan harga yang disetujui sebagai pembanding berikutnya
+      if (order.seller_name) {
+        const tersimpan = await catatHarga(order.id, order.seller_name, items);
+        if (!tersimpan) {
+          toast(
+            "Harga disetujui, tetapi belum tersimpan sebagai pembanding.",
+            "info"
+          );
+        }
+      } else if (kolomPenjual) {
+        toast(
+          "Isi nama penjual agar harga ini tersimpan sebagai pembanding.",
+          "info"
+        );
+      }
       toast("Harga disetujui. Lanjutkan ke transfer.", "success");
     } else {
       toast("Gagal menyetujui harga.", "error");
     }
+    setActionLoading(false);
+  };
+
+  // Untuk pesanan yang dibuat sebelum ada kolom penjual
+  const handleSimpanNamaPenjual = async () => {
+    if (!order) return;
+    const nama = penjual.kanonik(sellerInput);
+    if (!nama) {
+      toast("Isi nama penjual dulu ya.", "error");
+      return;
+    }
+
+    setActionLoading(true);
+    const { error } = await supabase
+      .from("orders")
+      .update({ seller_name: nama })
+      .eq("id", order.id);
+
+    if (error) {
+      toast("Gagal menyimpan nama penjual: " + error.message, "error");
+      setActionLoading(false);
+      return;
+    }
+
+    setOrder({ ...order, seller_name: nama });
+    // Jika harga sudah telanjur disetujui, simpan sekarang sebagai pembanding
+    if (["approved", "paid", "completed"].includes(order.status)) {
+      await catatHarga(order.id, nama, items);
+    }
+    penjual.muat();
+    toast("Nama penjual tersimpan.", "success");
     setActionLoading(false);
   };
 
@@ -281,6 +375,7 @@ export default function DetailDaftar() {
     setNewQty("");
     setNewUnit("kg");
     setNewCategory("");
+    setEditSeller(order?.seller_name ?? "");
     setEditing(true);
   };
 
@@ -335,6 +430,11 @@ export default function DetailDaftar() {
     );
     if (tidakValid) {
       toast("Pastikan nama dan jumlah semua barang sudah terisi.", "error");
+      return;
+    }
+    const penjualBaru = penjual.kanonik(editSeller);
+    if (kolomPenjual && !penjualBaru) {
+      toast("Isi nama penjual dulu ya.", "error");
       return;
     }
 
@@ -427,13 +527,21 @@ export default function DetailDaftar() {
     // 4. Kembalikan status ke 'sent' supaya vendor bisa menghitung ulang
     const { error: errOrder } = await supabase
       .from("orders")
-      .update({ status: "sent" })
+      .update({
+        status: "sent",
+        ...(kolomPenjual ? { seller_name: penjualBaru } : {}),
+      })
       .eq("id", orderId);
     if (errOrder)
       return gagal("Gagal mengirim perubahan: " + errOrder.message + ".");
 
     await muatUlangItems(orderId);
-    setOrder({ ...order, status: "sent" });
+    setOrder({
+      ...order,
+      status: "sent",
+      ...(kolomPenjual ? { seller_name: penjualBaru } : {}),
+    });
+    if (kolomPenjual) penjual.muat();
     setRevised(true);
     setEditing(false);
     setEditItems([]);
@@ -534,7 +642,11 @@ export default function DetailDaftar() {
       />
 
       <main className="mx-auto max-w-lg space-y-3">
-        <OrderTitle title={order.title} status={order.status} />
+        <OrderTitle
+          title={order.title}
+          status={order.status}
+          seller={order.seller_name}
+        />
 
         <Panel>
           <div className="px-4 py-3">
@@ -549,6 +661,22 @@ export default function DetailDaftar() {
               Ubah jumlah, hapus, atau tambah barang. Setelah dikirim, tukang
               sayur akan menghitung ulang harganya.
             </Notice>
+
+            {kolomPenjual && (
+              <Panel title="Penjual">
+                <div className="px-4 py-3">
+                  <NamaBarangInput
+                    ariaLabel="Nama penjual"
+                    placeholder="Nama penjual"
+                    value={editSeller}
+                    onChange={setEditSeller}
+                    suggestions={penjual.daftar}
+                    tersedia={kolomPenjual}
+                    petunjukBaru="Penjual baru, akan disimpan."
+                  />
+                </div>
+              </Panel>
+            )}
 
             <Panel title="Ubah Barang" aside={`${editItems.length} barang`}>
               {editItems.length === 0 && (
@@ -710,6 +838,53 @@ export default function DetailDaftar() {
         ) : (
           /* ---------- TAMPILAN BIASA ---------- */
           <>
+            {kolomPenjual && order.status === "draft" && (
+              <Panel title="Penjual">
+                <div className="space-y-2 px-4 py-3">
+                  <NamaBarangInput
+                    ariaLabel="Nama penjual"
+                    placeholder="Nama tukang sayur atau penjual"
+                    value={sellerInput}
+                    onChange={setSellerInput}
+                    suggestions={penjual.daftar}
+                    tersedia={kolomPenjual}
+                    petunjukBaru="Penjual baru, akan disimpan."
+                  />
+                  <p className="text-sm text-zinc-500">
+                    Nama penjual dipakai untuk membandingkan harga antar
+                    penjual.
+                  </p>
+                </div>
+              </Panel>
+            )}
+
+            {kolomPenjual && order.status !== "draft" && !order.seller_name && (
+              <Panel title="Nama Penjual">
+                <div className="space-y-3 px-4 py-3">
+                  <p className="text-base leading-6 text-zinc-600">
+                    Pesanan ini belum punya nama penjual, jadi harganya belum
+                    bisa dibandingkan.
+                  </p>
+                  <NamaBarangInput
+                    ariaLabel="Nama penjual"
+                    placeholder="Nama tukang sayur atau penjual"
+                    value={sellerInput}
+                    onChange={setSellerInput}
+                    suggestions={penjual.daftar}
+                    tersedia={kolomPenjual}
+                    petunjukBaru="Penjual baru, akan disimpan."
+                  />
+                  <Button
+                    variant="secondary"
+                    onClick={handleSimpanNamaPenjual}
+                    loading={actionLoading}
+                  >
+                    Simpan Nama Penjual
+                  </Button>
+                </div>
+              </Panel>
+            )}
+
             <Panel title="Daftar Barang" aside={`${items.length} barang`}>
               {groups.map((group, gi) => {
                 const subtotal = group.items.reduce(
@@ -741,6 +916,13 @@ export default function DetailDaftar() {
                             <p className="mt-0.5 text-sm tabular-nums text-zinc-500">
                               {item.qty} {item.unit}
                             </p>
+                            {order.status === "priced" && (
+                              <BarisPembanding
+                                item={item}
+                                riwayat={riwayat}
+                                orderId={order.id}
+                              />
+                            )}
                           </div>
                           <p className="shrink-0 text-right text-base font-semibold tabular-nums text-zinc-900">
                             {item.price ? (
