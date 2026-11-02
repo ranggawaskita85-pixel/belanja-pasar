@@ -51,18 +51,46 @@ export function useRiwayatHarga() {
     }
   }, []);
 
-  /** Simpan harga pesanan yang disetujui. Mengembalikan true jika berhasil. */
+  /**
+   * Simpan harga satu pesanan. Mengembalikan true jika berhasil.
+   * `waktu` = tanggal harga itu berlaku (bawaan: sekarang).
+   * `bersihkan` = hapus baris lama milik pesanan ini yang sudah tidak ada
+   * (dipakai saat catatan pesanan selesai diedit).
+   */
   const catat = useCallback(
-    async (orderId: string, penjual: string, items: ItemHarga[]) => {
-      const baris = susunBarisRiwayat(orderId, penjual, items);
-      if (baris.length === 0) return true;
+    async (
+      orderId: string,
+      penjual: string,
+      items: ItemHarga[],
+      waktu?: string,
+      opsi: { bersihkan?: boolean } = {}
+    ) => {
+      const baris = susunBarisRiwayat(orderId, penjual, items, waktu);
+      if (baris.length === 0 && !opsi.bersihkan) return true;
       try {
-        const { error } = await createClient()
-          .from("price_history")
-          .upsert(baris, { onConflict: "order_id,item_key,unit" });
-        if (error) {
-          console.warn("Gagal menyimpan riwayat harga:", error.message);
-          return false;
+        const supabase = createClient();
+        if (baris.length > 0) {
+          const { error } = await supabase
+            .from("price_history")
+            .upsert(baris, { onConflict: "order_id,item_key,unit" });
+          if (error) {
+            console.warn("Gagal menyimpan riwayat harga:", error.message);
+            return false;
+          }
+        }
+        if (opsi.bersihkan) {
+          const { data: lama } = await supabase
+            .from("price_history")
+            .select("id, item_key, unit")
+            .eq("order_id", String(orderId));
+          const dipakai = new Set(baris.map((b) => `${b.item_key}|${b.unit}`));
+          const usang = ((lama ?? []) as { id: number; item_key: string; unit: string }[])
+            .filter((r) => !dipakai.has(`${r.item_key}|${r.unit}`))
+            .map((r) => r.id);
+          if (usang.length > 0) {
+            const { error } = await supabase.from("price_history").delete().in("id", usang);
+            if (error) console.warn("Gagal membersihkan riwayat harga:", error.message);
+          }
         }
         return true;
       } catch (e) {
@@ -82,6 +110,8 @@ export function useRiwayatHarga() {
  */
 export function useDaftarPenjual() {
   const [daftar, setDaftar] = useState<MasterItem[]>([]);
+  // true jika kolom orders.seller_name ada (SQL Tahap C sudah dijalankan)
+  const [tersedia, setTersedia] = useState(false);
 
   const muat = useCallback(async () => {
     try {
@@ -90,7 +120,11 @@ export function useDaftarPenjual() {
         .select("seller_name, created_at")
         .not("seller_name", "is", null)
         .order("created_at", { ascending: false });
-      if (error || !data) return;
+      if (error || !data) {
+        setTersedia(false);
+        return;
+      }
+      setTersedia(true);
 
       // Ejaan terbaru untuk tiap nama menang.
       const unik = new Map<string, string>();
@@ -124,5 +158,5 @@ export function useDaftarPenjual() {
     [daftar]
   );
 
-  return { daftar, muat, kanonik };
+  return { daftar, tersedia, muat, kanonik };
 }

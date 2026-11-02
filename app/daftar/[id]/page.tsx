@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Save,
   Scale,
+  Download,
 } from "lucide-react";
 import StatusBadge from "@/app/components/StatusBadge";
 import StatusTimeline from "@/app/components/StatusTimeline";
@@ -41,6 +42,9 @@ import NamaBarangInput from "@/app/components/NamaBarangInput";
 import { useMasterItems } from "@/app/components/useMasterItems";
 import { useRiwayatHarga, useDaftarPenjual } from "@/app/components/useHarga";
 import PerbandinganHarga from "@/app/components/PerbandinganHarga";
+import EditCatatan from "@/app/components/EditCatatan";
+import { useKategori } from "@/app/components/useKategori";
+import { unduhExcelPesanan } from "@/lib/excel";
 
 type Order = {
   id: string;
@@ -49,6 +53,7 @@ type Order = {
   public_token?: string | null;
   seller_name?: string | null;
   disimpan_at?: string | null;
+  created_at?: string | null;
 };
 
 type Item = {
@@ -59,6 +64,7 @@ type Item = {
   unit: string;
   price: number | string | null;
   category?: string | null;
+  internal?: boolean | null;
 };
 
 // Salinan barang yang sedang diedit (di layar, belum disimpan)
@@ -130,6 +136,7 @@ export default function DetailDaftar() {
   const [sellerInput, setSellerInput] = useState("");
   const [editSeller, setEditSeller] = useState("");
   const [bandingOpen, setBandingOpen] = useState(false);
+  const [catatanOpen, setCatatanOpen] = useState(false);
 
   const supabase = createClient();
   const params = useParams();
@@ -137,6 +144,7 @@ export default function DetailDaftar() {
   const { confirm, toast } = useUI();
   useBeforeUnload(editing);
   const master = useMasterItems();
+  const kategori = useKategori();
   const penjual = useDaftarPenjual();
   const { riwayat, muat: muatRiwayat, catat: catatHarga } = useRiwayatHarga();
 
@@ -145,6 +153,8 @@ export default function DetailDaftar() {
   const kolomPenjual = order !== null && "seller_name" in order;
   // Sama untuk tombol Simpan: butuh kolom orders.disimpan_at (SQL Tahap D).
   const kolomSimpan = order !== null && "disimpan_at" in order;
+  // Kolom items.internal ada setelah SQL Tahap F-H dijalankan.
+  const kolomInternal = items.some((i) => "internal" in i);
 
   // Pembanding harga hanya dibutuhkan saat pembeli memutuskan menyetujui.
   useEffect(() => {
@@ -344,6 +354,41 @@ export default function DetailDaftar() {
     setActionLoading(false);
   };
 
+  // Pembeli menandai selesai jika penjual lupa menekan "barang sudah dikirim".
+  const handleSelesaiManual = async () => {
+    const ok = await confirm({
+      title: "Tandai pesanan selesai?",
+      description:
+        "Gunakan ini jika barang sudah Anda terima tetapi penjual belum menekan tombol konfirmasinya.",
+      confirmLabel: "Ya, selesai",
+    });
+    if (!ok || !order) return;
+
+    setActionLoading(true);
+    const { error } = await supabase
+      .from("orders")
+      .update({ status: "completed" })
+      .eq("id", order.id);
+
+    if (!error) {
+      setOrder({ ...order, status: "completed" });
+      toast("Pesanan ditandai selesai.", "success");
+    } else {
+      toast("Gagal menandai pesanan selesai.", "error");
+    }
+    setActionLoading(false);
+  };
+
+  const handleUnduhExcel = async () => {
+    if (!order) return;
+    try {
+      await unduhExcelPesanan(order, items);
+    } catch (e) {
+      console.warn(e);
+      toast("Gagal membuat file Excel.", "error");
+    }
+  };
+
   const handleTransfer = async () => {
     const ok = await confirm({
       title: "Konfirmasi transfer",
@@ -453,7 +498,7 @@ export default function DetailDaftar() {
         name: master.kanonik(newName),
         qty: newQty,
         unit: newUnit,
-        category: newCategory.trim() || null,
+        category: kategori.kanonik(newCategory) || null,
       },
     ]);
     setNewName("");
@@ -566,6 +611,7 @@ export default function DetailDaftar() {
         )
         .map((e) => ({ name: e.name, unit: e.unit }))
     );
+    await kategori.simpanBaru(editItems.map((e) => e.category));
 
     // 4. Kembalikan status ke 'sent' supaya vendor bisa menghitung ulang
     const { error: errOrder } = await supabase
@@ -660,11 +706,19 @@ export default function DetailDaftar() {
 
   const editGroups = groupByCategory(editItems);
   const hasEditCategory = editGroups.some((g) => g.category);
-  const kategoriTersedia = Array.from(
-    new Set(
-      editItems.map((i) => i.category).filter((c): c is string => Boolean(c))
+  // Pilihan judul kelompok: daftar tersimpan + yang sudah dipakai di pesanan ini
+  const opsiKategori = [
+    ...kategori.items,
+    ...Array.from(
+      new Set(
+        editItems.map((i) => i.category).filter((c): c is string => Boolean(c))
+      )
     )
-  );
+      .filter(
+        (c) => !kategori.items.some((k) => k.name.toLowerCase() === c.toLowerCase())
+      )
+      .map((name) => ({ name, last_unit: null })),
+  ];
 
   return (
     <div className="min-h-dvh bg-zinc-100 pb-48">
@@ -840,38 +894,16 @@ export default function DetailDaftar() {
                   </select>
                 </div>
 
-                <div>
-                  <input
-                    type="text"
-                    aria-label="Judul kelompok barang baru"
-                    placeholder="Judul kelompok (boleh kosong)"
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    className={inputCls}
-                  />
-                  {kategoriTersedia.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {kategoriTersedia.map((k) => {
-                        const aktif = newCategory === k;
-                        return (
-                          <button
-                            key={k}
-                            type="button"
-                            onClick={() => setNewCategory(aktif ? "" : k)}
-                            aria-pressed={aktif}
-                            className={`h-10 rounded-md border px-3 text-sm font-semibold transition ${
-                              aktif
-                                ? "border-emerald-700 bg-emerald-700 text-white"
-                                : "border-zinc-400 bg-white text-zinc-700"
-                            }`}
-                          >
-                            {k}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <NamaBarangInput
+                  ariaLabel="Judul kelompok barang baru"
+                  placeholder="Judul kelompok (boleh kosong)"
+                  value={newCategory}
+                  onChange={setNewCategory}
+                  suggestions={opsiKategori}
+                  tersedia={kategori.tersedia}
+                  petunjukBaru="Judul baru, akan masuk ke daftar pilihan."
+                  tampilSemua
+                />
 
                 <Button variant="secondary" onClick={tambahEditItem}>
                   <Plus className="h-5 w-5" strokeWidth={2.5} />
@@ -972,6 +1004,11 @@ export default function DetailDaftar() {
                             </p>
                             <p className="mt-0.5 text-sm tabular-nums text-zinc-500">
                               {item.qty} {item.unit}
+                              {item.internal && (
+                                <span className="ml-2 rounded-md bg-amber-100 px-1.5 py-0.5 text-xs font-bold uppercase text-amber-900">
+                                  Internal
+                                </span>
+                              )}
                             </p>
                           </div>
                           <p className="shrink-0 text-right text-base font-semibold tabular-nums text-zinc-900">
@@ -1173,14 +1210,53 @@ export default function DetailDaftar() {
             )}
 
             {order.status === "paid" && (
-              <div className="flex items-center gap-2 text-base text-zinc-600">
-                <PackageCheck className="h-5 w-5" />
-                Menunggu barang dikirim
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-base text-zinc-600">
+                  <PackageCheck className="h-5 w-5" />
+                  Menunggu barang dikirim
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={handleSelesaiManual}
+                  loading={actionLoading}
+                >
+                  <Check className="h-5 w-5" strokeWidth={2.5} />
+                  Selesai
+                </Button>
+              </div>
+            )}
+
+            {order.status === "completed" && (
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="secondary" onClick={handleUnduhExcel}>
+                  <Download className="h-5 w-5" strokeWidth={2.25} />
+                  Unduh Excel
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setCatatanOpen(true)}
+                >
+                  <Pencil className="h-5 w-5" strokeWidth={2.25} />
+                  Edit Catatan
+                </Button>
               </div>
             )}
           </>
         )}
       </BottomBar>
+
+      {catatanOpen && order && order.status === "completed" && (
+        <EditCatatan
+          order={order}
+          items={items}
+          kolomInternal={kolomInternal}
+          onClose={() => setCatatanOpen(false)}
+          onSaved={() => {
+            setCatatanOpen(false);
+            getDetail();
+          }}
+        />
+      )}
 
       {bandingOpen && order && (
         <PerbandinganHarga

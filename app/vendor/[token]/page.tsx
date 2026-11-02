@@ -21,6 +21,31 @@ import PopupInfo from "@/app/components/PopupInfo";
 /** Selisih waktu cek berkala saat menunggu keputusan pembeli. */
 const JEDA_CEK_MS = 10_000;
 
+/**
+ * Barang tambahan internal milik pembeli (Edit Catatan pada pesanan selesai)
+ * tidak ditampilkan ke penjual. Jika kolom items.internal belum ada
+ * (SQL belum dijalankan), semua barang dimuat seperti semula.
+ */
+async function ambilItemsPenjual(
+  supabase: ReturnType<typeof createClient>,
+  orderId: string
+) {
+  const { data, error } = await supabase
+    .from("items")
+    .select()
+    .eq("order_id", orderId)
+    .eq("internal", false)
+    .order("id", { ascending: true });
+  if (!error) return data;
+
+  const { data: semua } = await supabase
+    .from("items")
+    .select()
+    .eq("order_id", orderId)
+    .order("id", { ascending: true });
+  return semua;
+}
+
 type Order = {
   id: string;
   title: string;
@@ -93,11 +118,7 @@ export default function HalamanVendor() {
         if (orderData.status === "priced" && orderData.disimpan_at) {
           setTerimaKasih(true);
         }
-        const { data: itemsData } = await supabase
-          .from("items")
-          .select()
-          .eq("order_id", orderData.id)
-          .order("id", { ascending: true });
+        const itemsData = await ambilItemsPenjual(supabase, orderData.id);
 
         if (itemsData) {
           setItems(itemsData);
@@ -138,11 +159,7 @@ export default function HalamanVendor() {
 
       if (data.status !== statusSekarang) {
         // Pembeli mengubah pesanan (atau menyetujui): muat ulang isinya.
-        const { data: itemsBaru } = await supabase
-          .from("items")
-          .select()
-          .eq("order_id", data.id)
-          .order("id", { ascending: true });
+        const itemsBaru = await ambilItemsPenjual(supabase, data.id);
         if (itemsBaru) {
           setItems(itemsBaru);
           setRevisi(

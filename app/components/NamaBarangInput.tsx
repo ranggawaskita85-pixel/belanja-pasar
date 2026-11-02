@@ -17,6 +17,8 @@ type Props = {
   tersedia?: boolean;
   /** Teks petunjuk saat ketikan belum ada di daftar saran. */
   petunjukBaru?: string;
+  /** true = semua pilihan tampil saat kolom diketuk (untuk daftar pendek seperti judul kelompok). */
+  tampilSemua?: boolean;
   placeholder?: string;
   ariaLabel?: string;
 };
@@ -30,6 +32,7 @@ export default function NamaBarangInput({
   suggestions,
   tersedia = false,
   petunjukBaru = "Barang baru, akan disimpan ke daftar saran.",
+  tampilSemua = false,
   placeholder,
   ariaLabel,
 }: Props) {
@@ -41,7 +44,7 @@ export default function NamaBarangInput({
 
   // Yang diawali ketikan tampil lebih dulu, lalu yang mengandung ketikan.
   const hasil = useMemo(() => {
-    if (!q) return [];
+    if (!q) return tampilSemua ? suggestions : [];
     const awal: MasterItem[] = [];
     const tengah: MasterItem[] = [];
     for (const s of suggestions) {
@@ -49,8 +52,9 @@ export default function NamaBarangInput({
       if (n.startsWith(q)) awal.push(s);
       else if (n.includes(q)) tengah.push(s);
     }
-    return [...awal, ...tengah].slice(0, MAKS_SARAN);
-  }, [q, suggestions]);
+    const semua = [...awal, ...tengah];
+    return tampilSemua ? semua : semua.slice(0, MAKS_SARAN);
+  }, [q, suggestions, tampilSemua]);
 
   const persis = suggestions.some((s) => s.name.toLowerCase() === q);
   const tampilDaftar = open && hasil.length > 0 && !(hasil.length === 1 && persis);

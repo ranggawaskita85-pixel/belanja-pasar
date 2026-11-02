@@ -3,7 +3,8 @@
 import { createClient } from "@/lib/supabase";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, ChevronRight, RefreshCw, Trash2 } from "lucide-react";
+import { Plus, ChevronRight, RefreshCw, Trash2, Download } from "lucide-react";
+import RekapExcelDialog from "@/app/components/RekapExcelDialog";
 import StatusBadge from "@/app/components/StatusBadge";
 import PushToggle from "@/app/components/PushToggle";
 import { AppBar, BottomBar, IconButton } from "@/app/components/Shell";
@@ -58,6 +59,7 @@ export default function Home() {
   const [hariIni, setHariIni] = useState("");
   const [hapusId, setHapusId] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [rekapOpen, setRekapOpen] = useState(false);
   // true jika kolom orders.diarsipkan_at ada (SQL Tahap D sudah dijalankan)
   const [kolomArsip, setKolomArsip] = useState(false);
   const supabase = createClient();
@@ -273,6 +275,16 @@ export default function Home() {
           <span className="py-2 text-xs font-bold uppercase tracking-wide text-zinc-600">
             Daftar Belanja
           </span>
+          <div className="flex items-center">
+          <button
+            type="button"
+            onClick={() => setRekapOpen(true)}
+            disabled={loading}
+            className="inline-flex h-10 items-center gap-1.5 rounded-md px-2 text-xs font-bold uppercase tracking-wide text-emerald-800 hover:bg-emerald-50 active:bg-emerald-100 disabled:opacity-40"
+          >
+            <Download className="h-4 w-4" strokeWidth={2.25} />
+            Unduh Rekap
+          </button>
           <button
             type="button"
             onClick={resetRiwayat}
@@ -282,6 +294,7 @@ export default function Home() {
             <Trash2 className="h-4 w-4" strokeWidth={2.25} />
             {resetting ? "Memproses..." : "Reset Riwayat"}
           </button>
+          </div>
         </div>
 
         {loading ? (
@@ -351,6 +364,8 @@ export default function Home() {
           </ul>
         )}
       </main>
+
+      {rekapOpen && <RekapExcelDialog onTutup={() => setRekapOpen(false)} />}
 
       <BottomBar>
         <Link

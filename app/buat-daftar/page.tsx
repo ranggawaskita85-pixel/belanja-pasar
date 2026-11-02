@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, Save } from "lucide-react";
@@ -10,25 +10,40 @@ import {
   Panel,
   BottomBar,
   TotalLine,
+  Notice,
   inputCls,
   labelCls,
 } from "@/app/components/Shell";
 import { useUI } from "@/app/components/UIProvider";
-import {
-  SATUAN,
-  KATEGORI_CEPAT,
-  groupByCategory,
-} from "@/app/components/itemUtils";
+import { SATUAN, groupByCategory } from "@/app/components/itemUtils";
 import { useBeforeUnload } from "@/app/components/useBeforeUnload";
 import NamaBarangInput from "@/app/components/NamaBarangInput";
 import { useMasterItems } from "@/app/components/useMasterItems";
+import { useKategori } from "@/app/components/useKategori";
+import { useDaftarPenjual, useRiwayatHarga } from "@/app/components/useHarga";
+import { tanggalIsoLokal } from "@/lib/excel";
 
 type DraftItem = {
   name: string;
   qty: number;
   unit: string;
   category: string | null;
+  /** harga total; hanya diisi pada catatan tanggal lampau */
+  price: number | null;
 };
+
+const rp = (v: number) => `Rp ${Math.round(v).toLocaleString("id-ID")}`;
+
+/** "2026-10-20" -> tanggal itu jam 12.00 waktu perangkat, supaya tidak bergeser hari. */
+function waktuDicatat(tanggal: string) {
+  const [y, m, d] = tanggal.split("-").map(Number);
+  return new Date(y, m - 1, d, 12, 0, 0).toISOString();
+}
+
+function judulUntuk(tanggal: string) {
+  const [y, m, d] = tanggal.split("-").map(Number);
+  return "Belanja " + new Date(y, m - 1, d).toLocaleDateString("id-ID");
+}
 
 export default function BuatDaftar() {
   const [title, setTitle] = useState(
@@ -39,17 +54,51 @@ export default function BuatDaftar() {
   const [qty, setQty] = useState("");
   const [unit, setUnit] = useState("kg");
   const [category, setCategory] = useState("");
+  const [hargaItem, setHargaItem] = useState("");
   const [loading, setLoading] = useState(false);
   const [judulAwal] = useState(title);
+
+  // Tanggal belanja. Diisi setelah halaman tampil agar tidak beda dengan versi server.
+  const [hariIni, setHariIni] = useState("");
+  const [tanggal, setTanggal] = useState("");
+  const [penjualInput, setPenjualInput] = useState("");
+  const judulOtomatis = useRef(judulAwal);
 
   const supabase = createClient();
   const router = useRouter();
   const { toast, confirm } = useUI();
   const master = useMasterItems();
+  const kategori = useKategori();
+  const penjual = useDaftarPenjual();
+  const { catat: catatHarga } = useRiwayatHarga();
+
+  useEffect(() => {
+    const t = tanggalIsoLokal();
+    setHariIni(t);
+    setTanggal(t);
+  }, []);
+
+  // Tanggal sebelum hari ini = mencatat belanja yang sudah lewat.
+  const lampau = tanggal !== "" && hariIni !== "" && tanggal < hariIni;
 
   // Ada isian yang belum disimpan?
-  const dirty = items.length > 0 || itemName.trim() !== "" || title !== judulAwal;
+  const dirty =
+    items.length > 0 ||
+    itemName.trim() !== "" ||
+    title !== judulAwal ||
+    (tanggal !== "" && tanggal !== hariIni);
   useBeforeUnload(dirty && !loading);
+
+  const ubahTanggal = (nilai: string) => {
+    const baru = nilai && hariIni && nilai > hariIni ? hariIni : nilai;
+    setTanggal(baru);
+    // Judul bawaan ikut tanggal, selama belum diubah sendiri
+    if (baru && title === judulOtomatis.current) {
+      const judulBaru = judulUntuk(baru);
+      judulOtomatis.current = judulBaru;
+      setTitle(judulBaru);
+    }
+  };
 
   // Fungsi untuk menambah item ke daftar sementara (di layar)
   const tambahItem = () => {
@@ -61,17 +110,23 @@ export default function BuatDaftar() {
       toast("Jumlah barang harus lebih dari 0.", "error");
       return;
     }
+    if (hargaItem && !(Number(hargaItem) >= 0)) {
+      toast("Harga tidak boleh negatif.", "error");
+      return;
+    }
     setItems([
       ...items,
       {
         name: master.kanonik(itemName),
         qty: Number(qty),
         unit,
-        category: category.trim() || null,
+        category: kategori.kanonik(category) || null,
+        price: lampau && Number(hargaItem) > 0 ? Number(hargaItem) : null,
       },
     ]);
     setItemName("");
     setQty("");
+    setHargaItem("");
   };
 
   const hapusItem = (target: DraftItem) => {
@@ -86,10 +141,23 @@ export default function BuatDaftar() {
     }
     setLoading(true);
 
+    const waktu = lampau ? waktuDicatat(tanggal) : null;
+    const namaPenjual = lampau && penjual.tersedia ? penjual.kanonik(penjualInput) : "";
+
     // 1. Simpan judul daftar ke tabel 'orders'
+    //    Catatan tanggal lampau langsung berstatus selesai, tanpa link ke penjual.
     const { data: order, error: err1 } = await supabase
       .from("orders")
-      .insert({ title, status: "draft" })
+      .insert(
+        lampau
+          ? {
+              title,
+              status: "completed",
+              created_at: waktu,
+              ...(namaPenjual ? { seller_name: namaPenjual } : {}),
+            }
+          : { title, status: "draft" }
+      )
       .select()
       .single();
 
@@ -107,6 +175,7 @@ export default function BuatDaftar() {
       unit: i.unit,
       category: i.category,
       status: "requested",
+      ...(lampau ? { price: i.price } : {}),
     }));
 
     const { error: err2 } = await supabase.from("items").insert(itemsToInsert);
@@ -117,10 +186,21 @@ export default function BuatDaftar() {
       return;
     }
 
-    // Nama barang baru ikut masuk ke daftar saran (gagal pun tidak mengganggu)
+    // Nama barang dan judul kelompok baru ikut masuk ke daftar pilihan
+    // (gagal pun tidak mengganggu)
     await master.simpanBaru(items.map((i) => ({ name: i.name, unit: i.unit })));
+    await kategori.simpanBaru(items.map((i) => i.category));
 
-    toast("Daftar belanja berhasil disimpan!", "success");
+    // Catatan lampau dengan nama penjual dan harga ikut jadi harga pembanding,
+    // bertanggal sesuai hari belanjanya.
+    if (lampau && namaPenjual && waktu) {
+      await catatHarga(order.id, namaPenjual, items, waktu);
+    }
+
+    toast(
+      lampau ? "Catatan belanja berhasil disimpan!" : "Daftar belanja berhasil disimpan!",
+      "success"
+    );
     router.push("/"); // Kembali ke halaman utama
   };
 
@@ -140,6 +220,7 @@ export default function BuatDaftar() {
 
   const groups = groupByCategory(items);
   const hasCategory = groups.some((g) => g.category);
+  const totalHarga = items.reduce((n, i) => n + (i.price ?? 0), 0);
 
   return (
     <div className="min-h-dvh bg-zinc-100 pb-36">
@@ -161,37 +242,65 @@ export default function BuatDaftar() {
           </div>
         </Panel>
 
+        <Panel title="Tanggal Belanja">
+          <div className="space-y-3 px-4 py-3">
+            <div>
+              <label htmlFor="tanggal-belanja" className="sr-only">
+                Tanggal belanja
+              </label>
+              <input
+                id="tanggal-belanja"
+                type="date"
+                max={hariIni || undefined}
+                className={inputCls}
+                value={tanggal}
+                onChange={(e) => ubahTanggal(e.target.value)}
+              />
+            </div>
+
+            {lampau && (
+              <>
+                <Notice tone="info">
+                  Tanggal sudah lewat, jadi daftar ini dicatat sebagai belanja
+                  yang sudah selesai: tanpa link ke penjual, hanya untuk
+                  catatan Anda.
+                </Notice>
+                {penjual.tersedia && (
+                  <div>
+                    <label htmlFor="nama-penjual" className={labelCls}>
+                      Nama penjual (disarankan)
+                    </label>
+                    <NamaBarangInput
+                      id="nama-penjual"
+                      placeholder="Nama tukang sayur atau penjual"
+                      value={penjualInput}
+                      onChange={setPenjualInput}
+                      suggestions={penjual.daftar}
+                      tersedia={penjual.tersedia}
+                      petunjukBaru="Penjual baru, akan disimpan."
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </Panel>
+
         <Panel title="Tambah Barang">
           <div className="space-y-4 px-4 py-3">
             <div>
-              <span className={labelCls}>Judul kelompok (boleh kosong)</span>
-              <div className="flex flex-wrap gap-2">
-                {KATEGORI_CEPAT.map((k) => {
-                  const aktif = category === k;
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => setCategory(aktif ? "" : k)}
-                      aria-pressed={aktif}
-                      className={`h-10 rounded-md border px-3 text-sm font-semibold transition ${
-                        aktif
-                          ? "border-emerald-700 bg-emerald-700 text-white"
-                          : "border-zinc-400 bg-white text-zinc-700 hover:bg-zinc-50"
-                      }`}
-                    >
-                      {k}
-                    </button>
-                  );
-                })}
-              </div>
-              <input
-                type="text"
-                aria-label="Judul kelompok sendiri"
-                placeholder="Atau ketik judul sendiri"
-                className={`${inputCls} mt-2`}
+              <label htmlFor="judul-kelompok" className={labelCls}>
+                Judul kelompok (boleh kosong)
+              </label>
+              <NamaBarangInput
+                id="judul-kelompok"
+                placeholder="Pilih atau ketik judul sendiri"
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={setCategory}
+                suggestions={kategori.items}
+                tersedia={kategori.tersedia}
+                petunjukBaru="Judul baru, akan masuk ke daftar pilihan."
+                tampilSemua
               />
             </div>
 
@@ -253,6 +362,28 @@ export default function BuatDaftar() {
               </div>
             </div>
 
+            {lampau && (
+              <div>
+                <label htmlFor="harga-barang" className={labelCls}>
+                  Harga total (Rp), boleh kosong
+                </label>
+                <input
+                  id="harga-barang"
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  step="any"
+                  placeholder="0"
+                  className={`${inputCls} tabular-nums`}
+                  value={hargaItem}
+                  onChange={(e) => setHargaItem(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") tambahItem();
+                  }}
+                />
+              </div>
+            )}
+
             <Button variant="secondary" onClick={tambahItem}>
               <Plus className="h-5 w-5" strokeWidth={2.5} />
               Tambah ke Daftar
@@ -286,6 +417,11 @@ export default function BuatDaftar() {
                         <p className="shrink-0 text-base tabular-nums text-zinc-600">
                           {item.qty} {item.unit}
                         </p>
+                        {lampau && (
+                          <p className="w-24 shrink-0 text-right text-base font-semibold tabular-nums text-zinc-900">
+                            {item.price ? rp(item.price) : "-"}
+                          </p>
+                        )}
                         <button
                           type="button"
                           onClick={() => hapusItem(item)}
@@ -305,7 +441,11 @@ export default function BuatDaftar() {
       </main>
 
       <BottomBar>
-        <TotalLine label="Jumlah barang" value={String(items.length)} />
+        {lampau ? (
+          <TotalLine label="Total belanja" value={rp(totalHarga)} />
+        ) : (
+          <TotalLine label="Jumlah barang" value={String(items.length)} />
+        )}
         <div className="flex gap-2">
           <Button
             variant="secondary"
@@ -324,7 +464,11 @@ export default function BuatDaftar() {
             disabled={items.length === 0}
           >
             <Save className="h-5 w-5" strokeWidth={2.25} />
-            {loading ? "Menyimpan..." : "Simpan Daftar"}
+            {loading
+              ? "Menyimpan..."
+              : lampau
+                ? "Simpan Catatan"
+                : "Simpan Daftar"}
           </Button>
         </div>
       </BottomBar>
