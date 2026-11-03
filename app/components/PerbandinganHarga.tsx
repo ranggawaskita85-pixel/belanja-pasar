@@ -31,10 +31,13 @@ function Selisih({
   totalKiri,
   totalKanan,
   testId,
+  subjek = "Penjual lain",
 }: {
   totalKiri: number;
   totalKanan: number;
   testId?: string;
+  /** "Penjual lain" atau "Harga sebelumnya" (harga lama penjual yang sama) */
+  subjek?: string;
 }) {
   const { tipe, selisih } = arahSelisih(totalKiri, totalKanan);
   if (tipe === "sama") {
@@ -43,7 +46,7 @@ function Selisih({
   const murah = tipe === "kananMurah";
   return (
     <span data-testid={testId}>
-      {murah ? "Penjual lain lebih murah " : "Penjual lain lebih mahal "}
+      {murah ? `${subjek} lebih murah ` : `${subjek} lebih mahal `}
       <span
         className={`font-bold tabular-nums ${
           murah ? "text-red-700" : "text-emerald-700"
@@ -89,6 +92,17 @@ export default function PerbandinganHarga({
 
   const terpilih = opsi.find((o) => o.seller_key === pilihan) ?? opsi[0];
   const ringkas = terpilih ? hitungRingkasan(items, terpilih.sel) : null;
+  const subjek = terpilih?.jenis === "sendiri" ? "Harga sebelumnya" : "Penjual lain";
+
+  // Penjual yang sama pernah memberi harga lebih murah (untuk barang yang sama-sama ada)?
+  const pernahMurah = opsi
+    .filter((o) => o.jenis === "sendiri")
+    .map((o) => {
+      const sb = hitungRingkasan(items, o.sel).sebanding;
+      return { o, jumlah: sb.jumlah, selisih: Math.round(sb.totalKiri) - Math.round(sb.totalKanan) };
+    })
+    .filter((x) => x.jumlah > 0 && x.selisih > 0)
+    .sort((a, b) => b.selisih - a.selisih)[0];
 
   return (
     <div
@@ -140,15 +154,34 @@ export default function PerbandinganHarga({
                 >
                   {opsi.map((o) => (
                     <option key={o.seller_key} value={o.seller_key}>
-                      {o.seller_name} · {o.jumlahAda}/{items.length} barang ·{" "}
+                      {o.label} · {o.jumlahAda}/{items.length} barang ·{" "}
                       {rp(o.total)}
                     </option>
                   ))}
                 </select>
                 <p className="mt-1 text-sm text-zinc-500">
                   Bawaan: penjual dengan barang paling lengkap, lalu total
-                  terendah.
+                  terendah. Harga lama penjual yang sama ikut dibandingkan.
                 </p>
+                {pernahMurah && pernahMurah.o.seller_key !== terpilih.seller_key && (
+                  <div
+                    data-testid="info-pernah-lebih-murah"
+                    className="mt-3 rounded-md border-l-4 border-red-500 bg-red-50 px-3 py-2 text-sm leading-5 text-red-950"
+                  >
+                    <p>
+                      {pernahMurah.o.seller_name} pernah memberi harga lebih
+                      murah: {rp(pernahMurah.selisih)} untuk {pernahMurah.jumlah}{" "}
+                      barang yang sama.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setPilihan(pernahMurah.o.seller_key)}
+                      className="mt-1 font-bold underline"
+                    >
+                      Lihat perbandingannya
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-px border-b border-zinc-300 bg-zinc-300 text-sm font-bold">
@@ -156,9 +189,11 @@ export default function PerbandinganHarga({
                   <p>Penawaran {penjualSendiri || "ini"}</p>
                 </div>
                 <div className="bg-white px-4 py-2 text-zinc-900">
-                  <p>{terpilih.seller_name}</p>
+                  <p>{terpilih.label}</p>
                   <p className="font-normal text-zinc-500">
-                    harga per {tgl(terpilih.tanggalTerbaru)}
+                    {terpilih.varian === "termurah"
+                      ? "harga termurah yang pernah tercatat"
+                      : `harga per ${tgl(terpilih.tanggalTerbaru)}`}
                   </p>
                 </div>
               </div>
@@ -215,7 +250,7 @@ export default function PerbandinganHarga({
                     data-testid="catatan-kanan"
                     className="rounded-md border-l-4 border-amber-500 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-950"
                   >
-                    Total {terpilih.seller_name} bisa tampak lebih murah karena{" "}
+                    Total {terpilih.label} bisa tampak lebih murah karena{" "}
                     {ringkas.kananKosong.length} barang tidak ada atau satuannya
                     tidak bisa dikonversi: {daftarNama(ringkas.kananKosong)}.
                   </p>
@@ -250,7 +285,7 @@ export default function PerbandinganHarga({
                 </span>
               </p>
               <p>
-                Total {terpilih.seller_name}
+                Total {terpilih.label}
                 <span
                   data-testid="total-kanan"
                   className="block text-lg font-bold tabular-nums text-zinc-900"
@@ -263,6 +298,7 @@ export default function PerbandinganHarga({
               Selisih:{" "}
               <Selisih
                 testId="selisih-total"
+                subjek={subjek}
                 totalKiri={ringkas.totalKiri}
                 totalKanan={ringkas.totalKanan}
               />
@@ -273,6 +309,7 @@ export default function PerbandinganHarga({
                   Hanya {ringkas.sebanding.jumlah} barang yang sama-sama ada:{" "}
                   <Selisih
                     testId="selisih-sebanding"
+                    subjek={subjek}
                     totalKiri={ringkas.sebanding.totalKiri}
                     totalKanan={ringkas.sebanding.totalKanan}
                   />

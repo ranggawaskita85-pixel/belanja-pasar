@@ -199,8 +199,14 @@ export type SelKanan =
   | { status: "satuan_beda"; unitAsal: string };
 
 export type OpsiPenjual = {
+  /** Teks di pilihan. Harga lama penjual yang sama diberi keterangan "(harga sebelumnya)". */
+  label: string;
   seller_name: string;
+  /** Kunci unik pilihan. Pilihan harga lama penjual yang sama memakai awalan "~". */
   seller_key: string;
+  /** "lain" = penjual lain; "sendiri" = harga lama penjual pada pesanan ini */
+  jenis: "lain" | "sendiri";
+  varian?: "terakhir" | "termurah";
   /** sejajar dengan daftar barang di kolom kiri */
   sel: SelKanan[];
   jumlahAda: number;
@@ -220,25 +226,97 @@ type BarisKiri = {
   price: number | string | null;
 };
 
+type PilihHarga = "terbaru" | "termurah";
+
+const lebihBaru = (a: BarisRiwayat, b: BarisRiwayat) =>
+  a.approved_at < b.approved_at ? 1 : -1;
+
+/** Satu sel kolom kanan untuk satu barang, dari baris riwayat satu penjual. */
+function bangunSel(item: BarisKiri, baris: BarisRiwayat[], pilih: PilihHarga): SelKanan {
+  const kunci = kunciNama(item.name);
+  const untukBarang = baris.filter((r) => r.item_key === kunci);
+  if (untukBarang.length === 0) return { status: "kosong" };
+
+  const cocok = untukBarang.filter((r) => bisaDikonversi(r.unit, item.unit));
+  if (cocok.length === 0) {
+    return { status: "satuan_beda", unitAsal: [...untukBarang].sort(lebihBaru)[0].unit };
+  }
+
+  const perSatuan = (r: BarisRiwayat) =>
+    konversiHargaSatuan(Number(r.unit_price), r.unit, item.unit) as number;
+
+  const dipilih =
+    pilih === "terbaru"
+      ? [...cocok].sort(lebihBaru)[0]
+      : [...cocok].sort((a, b) => perSatuan(a) - perSatuan(b) || lebihBaru(a, b))[0];
+
+  const hargaSatuan = perSatuan(dipilih);
+  const qty = Number(item.qty);
+
+  return {
+    status: "ada",
+    harga: Math.round(hargaSatuan * (qty > 0 ? qty : 0)),
+    hargaSatuan,
+    unit: item.unit,
+    unitAsal: dipilih.unit,
+    dikonversi: infoSatuan(dipilih.unit).faktor !== infoSatuan(item.unit).faktor,
+    tanggal: dipilih.approved_at,
+  };
+}
+
+function bangunOpsi(
+  items: BarisKiri[],
+  baris: BarisRiwayat[],
+  pilih: PilihHarga,
+  info: Pick<OpsiPenjual, "label" | "seller_name" | "seller_key" | "jenis" | "varian">
+): OpsiPenjual | null {
+  const sel = items.map((item) => bangunSel(item, baris, pilih));
+  const ada = sel.filter((s): s is Extract<SelKanan, { status: "ada" }> => s.status === "ada");
+  if (ada.length === 0) return null;
+  return {
+    ...info,
+    sel,
+    jumlahAda: ada.length,
+    total: ada.reduce((n, s) => n + s.harga, 0),
+    tanggalTerbaru: ada.map((s) => s.tanggal).sort().slice(-1)[0],
+  };
+}
+
+const samaIsi = (a: OpsiPenjual, b: OpsiPenjual) =>
+  a.sel.length === b.sel.length &&
+  a.sel.every((s, i) => {
+    const t = b.sel[i];
+    if (s.status !== t.status) return false;
+    return s.status !== "ada" || (t.status === "ada" && s.harga === t.harga);
+  });
+
 /**
- * Menyusun kolom kanan untuk setiap penjual LAIN yang punya riwayat harga.
- * Setiap sel memakai harga terbaru penjual itu untuk barang yang sama,
- * dikonversi ke satuan dan jumlah kolom kiri.
- * Baris dari pesanan ini dan dari penjual yang sama diabaikan.
+ * Menyusun kolom kanan untuk setiap pembanding:
+ *  - setiap penjual LAIN yang punya riwayat harga (harga terbarunya), dan
+ *  - harga lama penjual YANG SAMA dari pesanan sebelumnya: "harga sebelumnya"
+ *    (yang terakhir) dan, jika berbeda, "termurah sebelumnya".
+ * Setiap sel dikonversi ke satuan dan jumlah kolom kiri. Baris dari pesanan
+ * ini sendiri tidak pernah dihitung (agar tidak membandingkan dengan dirinya).
  */
 export function susunPerbandingan(
   items: BarisKiri[],
   riwayat: BarisRiwayat[],
   opsi: { orderId?: string; penjualSendiri?: string } = {}
 ): HasilBanding {
-  const kunciSendiri = opsi.penjualSendiri ? kunciNama(opsi.penjualSendiri) : "";
+  const namaSendiri = rapikan(opsi.penjualSendiri ?? "");
+  const kunciSendiri = namaSendiri ? kunciNama(namaSendiri) : "";
   const kunciBarang = items.map((i) => kunciNama(i.name));
 
   const perPenjual = new Map<string, BarisRiwayat[]>();
+  const barisSendiri: BarisRiwayat[] = [];
+
   for (const r of riwayat) {
     if (opsi.orderId !== undefined && String(r.order_id) === String(opsi.orderId)) continue;
-    if (kunciSendiri && r.seller_key === kunciSendiri) continue;
     if (!kunciBarang.includes(r.item_key)) continue;
+    if (kunciSendiri && r.seller_key === kunciSendiri) {
+      barisSendiri.push(r);
+      continue;
+    }
     const daftar = perPenjual.get(r.seller_key);
     if (daftar) daftar.push(r);
     else perPenjual.set(r.seller_key, [r]);
@@ -247,57 +325,41 @@ export function susunPerbandingan(
   const hasil: OpsiPenjual[] = [];
 
   for (const [sellerKey, baris] of perPenjual) {
-    const sel: SelKanan[] = items.map((item, idx) => {
-      const untukBarang = baris.filter((r) => r.item_key === kunciBarang[idx]);
-      if (untukBarang.length === 0) return { status: "kosong" };
-
-      const terbaru = (a: BarisRiwayat, b: BarisRiwayat) =>
-        a.approved_at < b.approved_at ? 1 : -1;
-
-      const cocok = untukBarang
-        .filter((r) => bisaDikonversi(r.unit, item.unit))
-        .sort(terbaru)[0];
-
-      if (!cocok) {
-        return { status: "satuan_beda", unitAsal: untukBarang.sort(terbaru)[0].unit };
-      }
-
-      const hargaSatuan = konversiHargaSatuan(
-        Number(cocok.unit_price),
-        cocok.unit,
-        item.unit
-      ) as number;
-      const qty = Number(item.qty);
-
-      return {
-        status: "ada",
-        harga: Math.round(hargaSatuan * (qty > 0 ? qty : 0)),
-        hargaSatuan,
-        unit: item.unit,
-        unitAsal: cocok.unit,
-        dikonversi: infoSatuan(cocok.unit).faktor !== infoSatuan(item.unit).faktor,
-        tanggal: cocok.approved_at,
-      };
-    });
-
-    const ada = sel.filter((s): s is Extract<SelKanan, { status: "ada" }> => s.status === "ada");
-    if (ada.length === 0) continue;
-
-    hasil.push({
+    const o = bangunOpsi(items, baris, "terbaru", {
+      label: baris[0].seller_name,
       seller_name: baris[0].seller_name,
       seller_key: sellerKey,
-      sel,
-      jumlahAda: ada.length,
-      total: ada.reduce((n, s) => n + s.harga, 0),
-      tanggalTerbaru: ada.map((s) => s.tanggal).sort().slice(-1)[0],
+      jenis: "lain",
     });
+    if (o) hasil.push(o);
+  }
+
+  // Harga lama penjual yang sama
+  if (barisSendiri.length > 0) {
+    const terakhir = bangunOpsi(items, barisSendiri, "terbaru", {
+      label: `${namaSendiri} (harga sebelumnya)`,
+      seller_name: namaSendiri,
+      seller_key: "~terakhir",
+      jenis: "sendiri",
+      varian: "terakhir",
+    });
+    const termurah = bangunOpsi(items, barisSendiri, "termurah", {
+      label: `${namaSendiri} (termurah sebelumnya)`,
+      seller_name: namaSendiri,
+      seller_key: "~termurah",
+      jenis: "sendiri",
+      varian: "termurah",
+    });
+    if (terakhir) hasil.push(terakhir);
+    // Pilihan "termurah" hanya ditambahkan jika memang berbeda dari yang terakhir
+    if (termurah && (!terakhir || !samaIsi(terakhir, termurah))) hasil.push(termurah);
   }
 
   hasil.sort(
     (a, b) =>
       b.jumlahAda - a.jumlahAda ||
       a.total - b.total ||
-      a.seller_name.localeCompare(b.seller_name, "id")
+      a.label.localeCompare(b.label, "id")
   );
 
   return { opsi: hasil };
